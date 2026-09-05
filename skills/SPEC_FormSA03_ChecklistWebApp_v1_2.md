@@ -1,8 +1,20 @@
 # SPEC: FormSA03 Checklist WebApp (LINE LIFF + Google Apps Script)
 **เอกสาร System Analysis & Development Specification**
-**เวอร์ชัน:** 1.2 | **วันที่จัดทำ:** 2026-09-05 | **สถานะ:** พร้อมให้ทีม Dev เริ่มงาน (มีรายการ Open Items ที่ต้องยืนยันก่อนปิดจ๊อบ ดูหมวด 13)
+**เวอร์ชัน:** 1.3 | **วันที่จัดทำ:** 2026-09-05 | **สถานะ:** อัปเดตตาม Requirement หน้างานและการทดสอบจริง (Decisions D6 - D11)
 
 > เอกสารนี้เขียนขึ้นเพื่อให้ทีม Dev (รวมถึง AI dev) ตัดสินใจเรื่อง business logic ให้น้อยที่สุด ทุกจุดที่ผู้ให้โจทย์ระบุมาไม่ครบถ้วน จะถูกเติมเต็มด้วย "สมมติฐานของ SA" ที่ระบุไว้ชัดเจนว่าเป็นสมมติฐาน ไม่ใช่ requirement ดั้งเดิม — ทีม Dev ต้องยึดตามเอกสารนี้เป็นหลัก ไม่ต้องเดาเพิ่ม หากพบจุดที่ยังคลุมเครือระหว่างพัฒนา ให้กลับมาถามผู้ให้โจทย์ ไม่ใช่สมมติเอง
+
+> **Changelog v1.3 (2026-09-05):** อัปเดตข้อกำหนดตามผลการทดสอบหน้างานจริงและการปรับปรุงระบบ:
+> 1. **[D6] ปรับคำของปุ่มตัวเลือก Checklist บน UI:** เปลี่ยนจาก `"ปลอดภัย / มี (Y)"`, `"ไม่ปลอดภัย / ไม่มี (N)"`, `"ไม่เกี่ยวข้อง (-)"` ➡️ เป็น **`"✅ ผ่าน"`**, **`"❌ ไม่ผ่าน"`**, **`"➖ ไม่ตรวจ"`** เพื่อความกระชับและอ่านง่ายบนมือถือ (ส่วนข้อมูลที่บันทึกลงชีตและ JSON ยังคงเป็น `'Y'`, `'N'`, `'-'` เช่นเดิม 100%)
+> 2. **[D7] ระบุ Role ผู้อนุมัติและ Security Token:** ยืนยันผู้อนุมัติระดับ 1 = `"จป.วิชาชีพ"` (`APPROVE_TAG_L1`), ผู้อนุมัติระดับ 2 = `"จป.บริหาร"` (`APPROVE_TAG_L2`) และ Shared Token = `"secret-token-12345"` กำหนดผ่าน Script Properties (ห้าม hardcode) พร้อมตัวช่วย `Setup.initProperties()`
+> 3. **[D8] ปรับปรุงประสิทธิภาพ Config (In-Memory Caching):** ปรับ `Config.gs` ให้อ่าน Script Properties ด้วย `PropertiesService.getScriptProperties().getProperties()` **เพียงรอบเดียวต่อ 1 Execution** และแคชไว้ใน RAM (`_loadedProps`) เพื่อลด Latency สูงสุด แทนการยิง remote อ่านทีละ property ซ้ำๆ
+> 4. **[D9] สถาปัตยกรรม Dual-Deployment (GitHub Pages + GAS):** รองรับการรันแบบ Standalone Web App บน GitHub Pages (`https://pingly69.github.io/FM-SA-03/`) เรียก Web API ไปยัง GAS ผ่าน POST/GET เพื่อแก้ปัญหา iframe ติดขัดใน LINE LIFF ควบคู่กับการรันแบบ Native GAS Web App
+> 5. **[D10] การกำหนดสิทธิ์การ Deploy ใน `appsscript.json`:** ตั้งค่า `"access": "ANYONE_ANONYMOUS"` (ทุกคน แม้ไม่มีบัญชี Google) และ `"executeAs": "USER_DEPLOYING"` (รันในนามเจ้าของ) เพื่อให้ผู้ใช้ภายนอก/โฟร์แมนเปิดผ่าน LINE LIFF ได้ทันทีโดยไม่ติด Google Login Wall
+> 6. **[D11] การปรับปรุง UI/UX & Visual Hierarchy:**
+>    - นำป้าย `Safety Checklist` ออกจาก Navbar Header และเพิ่ม `white-space: nowrap;` ป้องกันข้อความไตเติลตกบรรทัดบนจอมือถือ
+>    - ปรับขนาดและน้ำหนักตัวอักษรของหัวข้อคำถามตรวจให้โดดเด่น: ขยายเป็น `1.05rem` Bold 700 สี `#0F172A` และหมายเลขข้อ `1.15rem` Extra-bold 800 สี `#2563EB`
+>    - ปรับขนาดปุ่มคำตอบให้พอดี `0.90rem` เพื่อให้หัวข้อการตรวจเด่นชัดกว่าปุ่มคำตอบ
+>    - แก้ไข Bug CSS Focus/Hover Contrast บนหน้าจอมือถือ ที่ทำให้ข้อความกลายเป็นสีขาวบนพื้นขาวเมื่อกดเลือก
 
 > **Changelog v1.2:** เปลี่ยนสถาปัตยกรรมการเก็บ/อ่าน `FORM_MASTER` จากการพิจารณาใช้ External `MasterCacheAPI` (ตาม OI-7 เดิม) มาเป็น **เก็บเป็น Sheet Tab ในไฟล์ Spreadsheet เดียวกับ `FMSA03_TRANSACTION`** พร้อมใช้ `CacheService` ของ Apps Script เอง (อายุ cache สูงสุด 6 ชม. ตามข้อจำกัดของ Google) และแยกฟังก์ชัน Clear/Write cache ไว้ต่างหากสำหรับ Time-driven Trigger เรียกทำงานทุกวัน — ดูรายละเอียดที่ D5, หมวด 4, หมวด 5.1.2, หมวด 6, OI-7 (ปิดแล้ว)
 
@@ -36,7 +48,13 @@
 | D2 | การกำหนดผู้อนุมัติระดับ 2 (`approve_profile2`) | **ผู้อนุมัติระดับ 1 เป็นผู้เลือกเองทุกครั้งตอนกดอนุมัติ** (ไม่ใช่ค่าตายตัวจาก config) |
 | D3 | เมื่อกด "ปฏิเสธ" (ระดับ 1 หรือ 2) | **ตีกลับสถานะให้ผู้บันทึกแก้ไข แล้วส่งเข้าอนุมัติใหม่ได้** (ไม่ใช่ปิดรายการถาวร) |
 | D4 | วิธีเก็บคำตอบ checklist ใน `FMSA03_TRANSACTION` | **เก็บเป็น JSON คอลัมน์เดียว (`ANSWERS_JSON`)** คีย์ = `record_id` ของ `FORM_MASTER` ไม่ใช้วิธีแยกคอลัมน์ `FMSA03_1...N` ตามที่เสนอไว้เดิม |
-| **D5 (ใหม่ v1.2)** | วิธีเข้าถึงข้อมูล `FORM_MASTER` (แทน OI-7 เดิม) | **ไม่เรียกผ่าน External API/MasterCacheAPI** แต่เก็บเป็น **Sheet Tab ในไฟล์ Spreadsheet เดียวกัน** กับ `FMSA03_TRANSACTION` (ใช้ `SPREADSHEET_ID` ตัวเดียวกัน) และอ่านผ่าน `CacheService.getScriptCache()` อายุ **6 ชั่วโมงเต็ม (21,600 วินาที — ค่าสูงสุดที่ Google อนุญาต)** พร้อมแยกฟังก์ชัน **Clear/Write cache ใหม่โดยเฉพาะ** เพื่อให้ Time-driven Trigger เรียกปลุกทำงานทุกวัน ลด cold-read latency — รายละเอียดเต็มดูหมวด 5.1.2 |
+| D5 (v1.2) | วิธีเข้าถึงข้อมูล `FORM_MASTER` (แทน OI-7 เดิม) | **ไม่เรียกผ่าน External API/MasterCacheAPI** แต่เก็บเป็น **Sheet Tab ในไฟล์ Spreadsheet เดียวกัน** กับ `FMSA03_TRANSACTION` (ใช้ `SPREADSHEET_ID` ตัวเดียวกัน) และอ่านผ่าน `CacheService.getScriptCache()` อายุ **6 ชั่วโมงเต็ม (21,600 วินาที)** พร้อมแยกฟังก์ชัน Clear/Write cache ให้ Trigger รายวันปลุกทำงาน |
+| **D6 (ใหม่ v1.3)** | ข้อความตัวเลือกคำตอบ Checklist บน UI | แสดงผลเป็น **"✅ ผ่าน"**, **"❌ ไม่ผ่าน"**, **"➖ ไม่ตรวจ"** (ส่วนค่าที่บันทึกใน `ANSWERS_JSON` ยังคงเป็น `'Y'`, `'N'`, `'-'` เช่นเดิม 100%) |
+| **D7 (ใหม่ v1.3)** | บทบาทผู้อนุมัติระดับ 1 และ 2 | ผู้อนุมัติระดับ 1 = **"จป.วิชาชีพ"**, ผู้อนุมัติระดับ 2 = **"จป.บริหาร"** ดึงจาก Central API ผ่าน Tag `APPROVE_TAG_L1` และ `APPROVE_TAG_L2` พร้อม Token = `secret-token-12345` ผ่าน Script Properties |
+| **D8 (ใหม่ v1.3)** | ประสิทธิภาพการอ่าน Script Properties | โหลดแบบ **Single Network Call + In-Memory Caching** ครั้งเดียวต่อ execution context (`_loadedProps`) ลด network latency ซ้ำซ้อน |
+| **D9 (ใหม่ v1.3)** | สถาปัตยกรรมการแสดงผล Web App | รองรับ **Dual-Mode**: ทั้ง Standalone Single Page App บน **GitHub Pages** (แก้ปัญหา LIFF iframe) และ Native **Google Apps Script Web App** |
+| **D10 (ใหม่ v1.3)** | สิทธิ์การเข้าถึง Web App (`appsscript.json`) | กำหนด `"access": "ANYONE_ANONYMOUS"` (ทุกคน) + `"executeAs": "USER_DEPLOYING"` (ฉัน) เพื่อให้เปิดใน LINE LIFF ได้โดยไม่ต้องล็อกอิน Google |
+| **D11 (ใหม่ v1.3)** | สัดส่วน Visual Hierarchy ของหัวข้อตรวจ | หัวข้อคำถามต้องใหญ่และเด่นกว่าปุ่มคำตอบ (`1.05rem` Bold 700 vs `0.90rem` บนปุ่ม) และนำป้าย Safety Checklist ออกจาก Navbar Header |
 
 ทีม Dev ยึดตาม Decision Log นี้เป็นอันดับแรกในกรณีที่เนื้อหาส่วนอื่นของเอกสารดูขัดแย้งกัน
 
@@ -268,14 +286,24 @@ Client (HtmlService templates):
 
 ## 6. Configuration / Script Properties
 
-| Key | คำอธิบาย | ตัวอย่าง (placeholder จากโจทย์ — ต้องยืนยันค่าจริงก่อนขึ้นระบบจริง) |
+| Key | คำอธิบาย | ค่าที่ใช้งานจริง (Configured) |
 |---|---|---|
-| `PROXY_URL_MASTER` | URL สำหรับยืนยันตัวตน | `https://script.google.com/macros/s/AKfycbwhbYUFPHlMq5KrtHRZUNTjeHsKtSF2IW0bEzJZwL-hqBhzFx3gXR4ijL83ajPs0zcQDA/exec` |
-| `PROXY_TOKEN` | token สำหรับเรียก proxy | `secret-token-12345` |
-| `LINE_CHANNEL_ACCESS_TOKEN` | token สำหรับส่ง LINE push message แจ้งเตือน | (ต้องขอจากผู้ให้โจทย์ — OI-8) |
-| `SPREADSHEET_ID` | ID ของ Google Sheet หลัก | **[อัปเดต v1.2]** ใช้ ID **เดียวกัน** สำหรับทั้ง Sheet Tab `FORM_MASTER` และ `FMSA03_TRANSACTION` — ไม่ต้องมี config แยกสำหรับ FORM_MASTER อีกต่อไป |
+| `SPREADSHEET_ID` | ID ของ Google Sheet หลัก (ทั้ง `FORM_MASTER` และ `FMSA03_TRANSACTION`) | `1ZBy4XalB74HFWVKRo30OFJG48Gxe41FruBoDuLnuxF4` |
+| `PROXY_URL_MASTER` | URL สำหรับ Central MasterCacheAPI (ยืนยันตัวตน, ดึงโปรไฟล์, ดึงผู้อนุมัติ) | `https://script.google.com/macros/s/AKfycbwhbYUFPHlMq5KrtHRZUNTjeHsKtSF2IW0bEzJZwL-hqBhzFx3gXR4ijL83ajPs0zcQDA/exec` |
+| `SHARED_TOKEN` | Shared-Secret Token สำหรับความปลอดภัยระหว่าง Server-to-Server | `secret-token-12345` |
+| `LIFF_ID` | LINE LIFF Application ID | `2009016720-NiJ6Jzhp` |
+| `APPROVE_TAG_L1` | Role Tag ผู้อนุมัติระดับ 1 (จป.วิชาชีพ) | `จป.วิชาชีพ` |
+| `APPROVE_TAG_L2` | Role Tag ผู้อนุมัติระดับ 2 (จป.บริหาร) | `จป.บริหาร` |
+| `SCREEN_TAG` | รหัสหน้าจอสำหรับสิทธิ์เข้าใช้งาน | `SA03` |
+| `PROJECT_DATASET_KEY` | Dataset Key สำหรับดึงรายชื่อโครงการจาก Central API | `project` |
+| `ENABLE_SHEET_FALLBACK`| เปิดใช้ Sheet ตรงเมื่อ Central API ล่มหรือไม่ | `false` |
+| `LINE_CHANNEL_ACCESS_TOKEN` | Token สำหรับส่ง LINE push message แจ้งเตือน | (กำหนดใน Script Properties เมื่อต้องการเปิดใช้งาน) |
 
-**หลักการ:** เปลี่ยนค่าใน Script Properties แล้วมีผลทันทีโดยไม่ต้อง deploy เวอร์ชันใหม่
+> **[สถาปัตยกรรม Config v1.3 - In-Memory Caching]:**
+> เพื่อแก้ไขปัญหา Latency ที่เกิดจากการเรียก `PropertiesService.getScriptProperties().getProperty(key)` ซ้ำๆ หลายครั้งใน 1 Request, ระบบได้ปรับให้ `Config.gs` ใช้กลไก **Single Network Call + In-Memory Caching**:
+> - โหลด `getProperties()` เพียงรอบเดียวต่อ 1 Execution Context และเก็บผลลัพธ์ในตัวแปร RAM `_loadedProps`
+> - การเรียกอ่านค่าผ่าน `Config.getXxx()` ในรอบถัดไปจะดึงจาก RAM ทันที (< 0.001 ms)
+> - มีเมธอด `Config.clearCache()` เพื่อรองรับการ Reset แคชหลังจากฟังก์ชัน `Setup.initProperties()` บันทึกค่าใหม่
 
 ---
 
@@ -436,33 +464,49 @@ Error response ต้องระบุ `code` ที่ frontend ใช้ต�
 
 ## 13. Open Items — ต้องยืนยันกับผู้ให้โจทย์ก่อนขึ้น Production
 
-| # | ประเด็น | ผลกระทบถ้าไม่ยืนยัน |
+| # | ประเด็น | ผลกระทบถ้าไม่ยืนยัน / สถานะล่าสุด |
 |---|---|---|
 | ~~OI-1~~ | ~~เพิ่มคอลัมน์ `answer_column_no`~~ | **ยกเลิกแล้ว** — เปลี่ยนไปใช้ JSON เก็บคำตอบตาม Decision D4 |
-| OI-2 | `FM-SA-03` ในโจทย์เดิมหมายถึงชีตเดียวกับ `FORM_MASTER` จริงหรือไม่ | ถ้าเป็นชีตอื่นจริง โครงสร้างข้อมูลในหมวด 5 ต้องแก้ |
-| OI-3 | คอลัมน์ `score` ต้องคำนวณ/แสดงผลรวมคะแนนใน MVP นี้หรือไม่ | ถ้าต้องคำนวณ ต้องเพิ่ม logic คำนวณคะแนนรวมและอาจต้องมี threshold ผ่าน/ไม่ผ่าน |
-| OI-4 | ช่องเหตุผลตอนปฏิเสธ (`REJECT_REASON`) บังคับกรอกหรือไม่ และต้องเก็บประวัติทุกครั้งหรือไม่ | ถ้าต้องเก็บ history ทุกครั้ง ต้องเพิ่มชีต log แยก |
-| OI-5 | Contract จริงของ `getUsers` และ `getApprove` API | ถ้า contract ไม่ตรงที่สมมติไว้ ต้องแก้ Repository/Service |
-| OI-6 | เอกสาร integration-guide.md ของ API รายชื่อโครงการ | ต้องขอเอกสารเพิ่มเติม |
-| ~~OI-7~~ | ~~จะใช้ MasterCacheAPI หรืออ่านจากชีตตรงทุกครั้ง~~ | **[ปิดแล้ว v1.2 — ตาม D5]** เปลี่ยนเป็นเก็บ `FORM_MASTER` เป็น Sheet ในไฟล์เดียวกับ Transaction + ใช้ `CacheService` ภายในโปรเจกต์เอง อายุ 6 ชม. พร้อม Trigger รายวัน refresh (ดูหมวด 5.1.2) |
-| OI-8 | ข้อความเทมเพลตแจ้งเตือน LINE และ `LINE_CHANNEL_ACCESS_TOKEN` พร้อมใช้หรือยัง | ถ้าไม่มี token การแจ้งเตือนจะทำไม่ได้เลย |
-| OI-9 | ยืนยัน "1 project/วัน" หมายถึง 1 record ต่อ (ผู้ใช้ + วันที่) | ถ้าตีความผิด logic การกันซ้ำทั้งหมดต้องออกแบบใหม่ |
-| OI-10 | ยืนยันจุดล็อกการแก้ไข: ล็อกทันทีที่ L1 อนุมัติ หรือช้ากว่านั้น | กระทบสิทธิ์แก้ไขของผู้ใช้งานโดยตรง |
-| OI-11 | ตอนกด "อนุมัติทั้งหมด" ผู้อนุมัติ L2 ที่เลือกใช้ร่วมกันทุกรายการในชุดนั้นใช่หรือไม่ | กระทบ UI/UX และ payload ของ `approveAction` |
-| OI-12 | ควรห้ามเลือก `TRANS_DATE` เป็นวันที่ในอนาคตหรือไม่ | เป็น validation เสริมเล็กน้อย |
-| **OI-12b (ใหม่ v1.2)** | ตั้ง Trigger refresh cache รอบเดียว/วัน (05:00) พอหรือควรตั้ง 2 รอบ/วัน | ถ้ารอบเดียว จะมีช่วง ~18 ชม./วัน ที่ cache หมดอายุแล้วต้องพึ่ง lazy-refresh |
-| **OI-13 (ใหม่ v1.2)** | ถ้า `FORM_MASTER` เกิน 100 KB ต่อ cache key จะ implement chunking ล่วงหน้าหรือรอถึงจุดที่เกินจริง | ถ้าไม่มี chunking รองรับ `cache.put()` จะ error หรือ silently fail |
+| OI-2 | `FM-SA-03` ในโจทย์เดิมหมายถึงชีตเดียวกับ `FORM_MASTER` จริงหรือไม่ | ใช้ชีต `FORM_MASTER` ใน Spreadsheet เดียวกัน |
+| OI-3 | คอลัมน์ `score` ต้องคำนวณ/แสดงผลรวมคะแนนใน MVP นี้หรือไม่ | ยังไม่คำนวณคะแนนใน Phase 1 |
+| OI-4 | ช่องเหตุผลตอนปฏิเสธ (`REJECT_REASON`) บังคับกรอกหรือไม่ | บังคับกรอกเมื่อกดปฏิเสธใน Modal |
+| ~~OI-5~~ | ~~Contract จริงของ `getUsers` และ `getApprove` API~~ | **[ปิดแล้ว v1.3 — ตาม D7]** ใช้ Central MasterCacheAPI ดึงผ่าน Tag: L1 = `"จป.วิชาชีพ"`, L2 = `"จป.บริหาร"` และ Token = `"secret-token-12345"` |
+| ~~OI-6~~ | ~~เอกสาร integration-guide.md ของ API รายชื่อโครงการ~~ | **[ปิดแล้ว v1.3]** เชื่อมต่อ Central API ดึง Dataset Key = `"project"` สำเร็จ |
+| ~~OI-7~~ | ~~จะใช้ MasterCacheAPI หรืออ่านจากชีตตรงทุกครั้ง~~ | **[ปิดแล้ว v1.2 — ตาม D5]** เก็บ `FORM_MASTER` ในไฟล์เดียวกับ Transaction + ใช้ `CacheService` ภายในโปรเจกต์เอง อายุ 6 ชม. พร้อม Trigger รายวัน refresh |
+| OI-8 | ข้อความเทมเพลตแจ้งเตือน LINE และ `LINE_CHANNEL_ACCESS_TOKEN` พร้อมใช้หรือยัง | ถ้ายังไม่กำหนด token ระบบจะข้ามการ push notification โดยไม่ error |
+| OI-9 | ยืนยัน "1 project/วัน" หมายถึง 1 record ต่อ (ผู้ใช้ + วันที่) | 1 วัน ผู้ใช้สามารถเลือกวันที่ตรวจสอบได้ และบันทึก/แก้ไขตามวันนั้น |
+| OI-10 | ยืนยันจุดล็อกการแก้ไข: ล็อกทันทีที่ L1 อนุมัติ หรือช้ากว่านั้น | ล็อกทันทีเมื่อ `STATUS` เป็น `PENDING_L2` หรือ `APPROVED` |
+| OI-11 | ตอนกด "อนุมัติทั้งหมด" ผู้อนุมัติ L2 ที่เลือกใช้ร่วมกันทุกรายการในชุดนั้นใช่หรือไม่ | ใช่ ผู้อนุมัติระดับ 1 เลือกผู้อนุมัติ L2 ท่านเดียวสำหรับ batch นั้น |
+| OI-12 | ควรห้ามเลือก `TRANS_DATE` เป็นวันที่ในอนาคตหรือไม่ | มี Datepicker กำหนดค่าเริ่มต้นเป็นวันปัจจุบัน |
+| **OI-12b (v1.2)** | ตั้ง Trigger refresh cache รอบเดียว/วัน (05:00) | มีสคริปต์ `TriggerSetup.gs` รองรับ |
+| **OI-13 (v1.2)** | ถ้า `FORM_MASTER` เกิน 100 KB ต่อ cache key | เฝ้าระวังขนาดคำถาม ปัจจุบันมี 20 ข้อ ขนาดประมาณ ~2 KB |
 
 ---
 
 ## 14. UI/UX Requirements (Mobile-first)
 
-- ปุ่มตอบ `Y`/`N`/`-` ใช้เป็นปุ่มแบบ segmented control ขนาดใหญ่ (ไม่ใช้ dropdown)
-- แสดง progress indicator (เช่น "ตอบแล้ว 12/20 ข้อ")
-- หัวข้อ section (`header_flag='Y'`) ใช้เป็น sticky header เวลาเลื่อนหน้าจอ
-- ปุ่ม "บันทึก" เป็น sticky ที่ด้านล่างจอเสมอ
-- หน้าจออนุมัติ: ใช้ card list แทนตาราง แต่ละ card แสดง โครงการ / วันที่ / ผู้บันทึก แบบสรุป กดเข้าไปดูรายละเอียดคำตอบทั้งหมดได้ก่อนตัดสินใจ
-- Loading state ต้องชัดเจนทุกครั้งที่เรียก server
+- **Header / Navigation Bar:**
+  - แสดงเฉพาะโลโก้และชื่อไตเติล `🛡️ FM-SA-03` ชัดเจนในบรรทัดเดียว (`white-space: nowrap;`)
+  - นำป้าย Sub-badge `Safety Checklist` ออกเพื่อไม่ให้เบียดกับ Avatar และชื่อผู้ใช้งาน
+- **หัวข้อการตรวจ (Inspection Questions Visual Hierarchy):**
+  - ข้อความหัวข้อคำถามต้องเป็น **จุดนำสายตาหลัก (Primary Focus)** ที่ผู้ใช้ต้องอ่านก่อนกดเสมอ
+  - ขนาดตัวอักษรหัวข้อคำถาม: **`1.05rem` (หนา Bold 700)** สีดำเข้ม `#0F172A` (Contrast สูง สบายตา อ่านง่ายในไซต์งานกลางแจ้ง)
+  - หมายเลขข้อคำถาม (1., 2., ...): **`1.15rem` (Extra-Bold 800)** สีน้ำเงินสด `#2563EB`
+  - กล่องการ์ดคำถาม (`.question-card`): ขอบมน `radius-sm` มีเงาบางเบาและเน้นกรอบซ้ายสีน้ำเงินเมื่อตอบแล้ว (`.answered`)
+- **ปุ่มตัวเลือกคำตอบ (Segmented Control Buttons):**
+  - มี 3 ตัวเลือกกระชับ: **`✅ ผ่าน`** (Y), **`❌ ไม่ผ่าน`** (N), **`➖ ไม่ตรวจ`** (-)
+  - ขนาดตัวอักษร: **`0.90rem` (Semi-bold 600)** และ Padding **`10px 4px`** ปรับขนาดให้เป็น Action รอง ไม่แย่งความเด่นของหัวข้อ
+  - ล็อกสีทึบชัดเจนเมื่อ Active (`!important`):
+    - `✅ ผ่าน`: พื้นเขียว `#10B981` ตัวหนังสือขาว `#FFFFFF`
+    - `❌ ไม่ผ่าน`: พื้นแดง `#EF4444` ตัวหนังสือขาว `#FFFFFF`
+    - `➖ ไม่ตรวจ`: พื้นเทาเข้ม `#64748B` ตัวหนังสือขาว `#FFFFFF`
+  - กำหนด `outline: none;` และ `-webkit-tap-highlight-color: transparent;` พร้อมสโคป `:not(.active-*)` เพื่อป้องกันบั๊ก Mobile Hover/Focus Contrast ที่ทำให้ตัวหนังสือขาวกลืนกับพื้นขาว
+- **ความคืบหน้าและการบันทึก:**
+  - แสดง Progress Bar ติดตามเปอร์เซ็นต์และจำนวนข้อที่ตอบแล้ว (เช่น "100% (20/20)")
+  - ปุ่ม "💾 บันทึกผลการตรวจสอบ" เป็น Sticky Bottom Bar ตรึงด้านล่างจอเสมอ
+- **หน้าจออนุมัติ (Approval View):**
+  - แสดงแบบ Card List แยกแท็บ "รออนุมัติระดับ 1" และ "รออนุมัติระดับ 2"
+  - มี Modal รายละเอียดข้อตรวจ แสดงสถานะเป็น Badge `✅ ผ่าน`, `❌ ไม่ผ่าน`, `➖ ไม่ตรวจ` ตรงกันทุกหน้าจอ
 
 ---
 
