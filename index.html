@@ -80,6 +80,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      white-space: nowrap;
     }
 
     .brand-badge {
@@ -339,42 +340,65 @@
     }
 
     .segmented-btn {
-      padding: 10px 8px;
+      padding: 12px 6px;
       border: 1.5px solid var(--slate-200);
       background: #FFFFFF;
       border-radius: var(--radius-sm);
       font-family: inherit;
-      font-size: 0.88rem;
+      font-size: 0.95rem;
       font-weight: 600;
-      color: var(--slate-600);
+      color: var(--slate-700);
       cursor: pointer;
       transition: all 0.15s ease;
       text-align: center;
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
     }
 
-    .segmented-btn:hover:not(:disabled) {
-      background: var(--slate-50);
+    .segmented-btn:focus {
+      outline: none;
     }
 
-    .segmented-btn.active-y {
-      background: var(--success);
-      border-color: var(--success);
-      color: #FFFFFF;
-      box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+    /* สไตล์ปุ่มปกติเมื่อ Hover หรือ Focus (ยังไม่ได้เลือก) */
+    .segmented-btn:not(.active-y):not(.active-n):not(.active-na):hover,
+    .segmented-btn:not(.active-y):not(.active-n):not(.active-na):focus {
+      background: var(--slate-100);
+      border-color: var(--slate-300);
+      color: var(--slate-800);
     }
 
-    .segmented-btn.active-n {
-      background: var(--danger);
-      border-color: var(--danger);
-      color: #FFFFFF;
-      box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+    /* สถานะเลือก: ผ่าน (Y) - สีเขียวเข้ม พื้นทึบ ตัวหนังสือขาวชัดเจน */
+    .segmented-btn.active-y,
+    .segmented-btn.active-y:hover,
+    .segmented-btn.active-y:focus,
+    .segmented-btn.active-y:active {
+      background: #10B981 !important;
+      border-color: #059669 !important;
+      color: #FFFFFF !important;
+      box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4);
     }
 
-    .segmented-btn.active-na {
-      background: var(--slate-500);
-      border-color: var(--slate-500);
-      color: #FFFFFF;
-      box-shadow: 0 2px 4px rgba(100, 116, 139, 0.3);
+    /* สถานะเลือก: ไม่ผ่าน (N) - สีแดงสด พื้นทึบ ตัวหนังสือขาวชัดเจน */
+    .segmented-btn.active-n,
+    .segmented-btn.active-n:hover,
+    .segmented-btn.active-n:focus,
+    .segmented-btn.active-n:active {
+      background: #EF4444 !important;
+      border-color: #DC2626 !important;
+      color: #FFFFFF !important;
+      box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+    }
+
+    /* สถานะเลือก: ไม่ตรวจ (-) - สีเทาเข้ม พื้นทึบ ตัวหนังสือขาวชัดเจน */
+    .segmented-btn.active-na,
+    .segmented-btn.active-na:hover,
+    .segmented-btn.active-na:focus,
+    .segmented-btn.active-na:active {
+      background: #64748B !important;
+      border-color: #475569 !important;
+      color: #FFFFFF !important;
+      box-shadow: 0 2px 6px rgba(100, 116, 139, 0.4);
     }
 
     /* Sticky Bottom Bar */
@@ -566,7 +590,6 @@
     <div class="header-top">
       <div class="brand-title">
         <span>🛡️ FM-SA-03</span>
-        <span class="brand-badge">Safety Checklist</span>
       </div>
       <div class="user-profile">
         <div id="headerUserAvatar" class="user-avatar">?</div>
@@ -1125,11 +1148,11 @@
                 '</div>' +
                 '<div class="segmented-control">' +
                   '<button type="button" class="segmented-btn ' + activeY + '" ' + disabledAttr +
-                    ' onclick="ChecklistModule.setAnswer(' + item.record_id + ', \'Y\')">✅ ปลอดภัย / มี (Y)</button>' +
+                    ' onclick="ChecklistModule.setAnswer(' + item.record_id + ', \'Y\')">✅ ผ่าน</button>' +
                   '<button type="button" class="segmented-btn ' + activeN + '" ' + disabledAttr +
-                    ' onclick="ChecklistModule.setAnswer(' + item.record_id + ', \'N\')">❌ ไม่ปลอดภัย / ไม่มี (N)</button>' +
+                    ' onclick="ChecklistModule.setAnswer(' + item.record_id + ', \'N\')">❌ ไม่ผ่าน</button>' +
                   '<button type="button" class="segmented-btn ' + activeNA + '" ' + disabledAttr +
-                    ' onclick="ChecklistModule.setAnswer(' + item.record_id + ', \'-\')">➖ ไม่เกี่ยวข้อง (-)</button>' +
+                    ' onclick="ChecklistModule.setAnswer(' + item.record_id + ', \'-\')">➖ ไม่ตรวจ</button>' +
                 '</div>' +
               '</div>';
           }
@@ -1585,11 +1608,11 @@
               var badgeHtml = '';
 
               if (ans === 'Y') {
-                badgeHtml = '<span style="background:#DCFCE7; color:#15803D; font-weight:700; padding:2px 8px; border-radius:4px;">✅ ปลอดภัย (Y)</span>';
+                badgeHtml = '<span style="background:#DCFCE7; color:#15803D; font-weight:700; padding:2px 8px; border-radius:4px;">✅ ผ่าน</span>';
               } else if (ans === 'N') {
-                badgeHtml = '<span style="background:#FEE2E2; color:#B91C1C; font-weight:700; padding:2px 8px; border-radius:4px;">❌ ไม่ปลอดภัย (N)</span>';
+                badgeHtml = '<span style="background:#FEE2E2; color:#B91C1C; font-weight:700; padding:2px 8px; border-radius:4px;">❌ ไม่ผ่าน</span>';
               } else {
-                badgeHtml = '<span style="background:#E2E8F0; color:#475569; font-weight:600; padding:2px 8px; border-radius:4px;">➖ ไม่เกี่ยวข้อง (-)</span>';
+                badgeHtml = '<span style="background:#E2E8F0; color:#475569; font-weight:600; padding:2px 8px; border-radius:4px;">➖ ไม่ตรวจ</span>';
               }
 
               html += '<tr style="border-bottom: 1px solid #E2E8F0;">' +

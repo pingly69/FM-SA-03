@@ -359,11 +359,11 @@ var ApprovalModule = {
           var badgeHtml = '';
 
           if (ans === 'Y') {
-            badgeHtml = '<span style="background:#DCFCE7; color:#15803D; font-weight:700; padding:2px 8px; border-radius:4px;">✅ ปลอดภัย (Y)</span>';
+            badgeHtml = '<span style="background:#DCFCE7; color:#15803D; font-weight:700; padding:2px 8px; border-radius:4px;">✅ ผ่าน</span>';
           } else if (ans === 'N') {
-            badgeHtml = '<span style="background:#FEE2E2; color:#B91C1C; font-weight:700; padding:2px 8px; border-radius:4px;">❌ ไม่ปลอดภัย (N)</span>';
+            badgeHtml = '<span style="background:#FEE2E2; color:#B91C1C; font-weight:700; padding:2px 8px; border-radius:4px;">❌ ไม่ผ่าน</span>';
           } else {
-            badgeHtml = '<span style="background:#E2E8F0; color:#475569; font-weight:600; padding:2px 8px; border-radius:4px;">➖ ไม่เกี่ยวข้อง (-)</span>';
+            badgeHtml = '<span style="background:#E2E8F0; color:#475569; font-weight:600; padding:2px 8px; border-radius:4px;">➖ ไม่ตรวจ</span>';
           }
 
           html += '<tr style="border-bottom: 1px solid #E2E8F0;">' +

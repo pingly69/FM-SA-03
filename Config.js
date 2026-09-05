@@ -1,6 +1,7 @@
 /**
  * Config.js - การตั้งค่าระบบ FormSA03 Checklist WebApp
- * จัดการและอ่านค่าจาก Script Properties ทั้งหมด ห้าม hardcode ใน business logic
+ * ปรับปรุงประสิทธิภาพ: อ่าน PropertiesService.getScriptProperties().getProperties() ครั้งเดียว
+ * และแคชไว้ในหน่วยความจำ (_loadedProps) ตลอดรอบการทำงาน ไม่ต้องเรียกอ่านซ้ำหลายครั้ง
  */
 
 var Config = (function() {
@@ -17,15 +18,28 @@ var Config = (function() {
     ENABLE_SHEET_FALLBACK: 'false'
   };
 
-  function getProp_(key) {
+  // ตัวแปรแคชในหน่วยความจำ อ่าน Properties ครั้งเดียวต่อ 1 Execution Context
+  var _loadedProps = null;
+
+  function loadAllProps_() {
+    if (_loadedProps !== null) {
+      return _loadedProps;
+    }
     try {
-      var props = PropertiesService.getScriptProperties();
-      var val = props.getProperty(key);
-      if (val !== null && val !== undefined && val !== '') {
-        return val;
-      }
+      // ดึง Properties ทั้งหมดในรอบเดียว (Single Network Call)
+      _loadedProps = PropertiesService.getScriptProperties().getProperties() || {};
     } catch (e) {
-      Logger.log('[Config] Error reading property ' + key + ': ' + e);
+      Logger.log('[Config] Error reading script properties: ' + e);
+      _loadedProps = {};
+    }
+    return _loadedProps;
+  }
+
+  function getProp_(key) {
+    var p = loadAllProps_();
+    var val = p[key];
+    if (val !== null && val !== undefined && val !== '') {
+      return val;
     }
     return DEFAULTS[key] || '';
   }
@@ -60,6 +74,9 @@ var Config = (function() {
     },
     isSheetFallbackEnabled: function() {
       return getProp_('ENABLE_SHEET_FALLBACK') === 'true';
+    },
+    clearCache: function() {
+      _loadedProps = null;
     },
     getAll: function() {
       var res = {};

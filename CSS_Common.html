@@ -73,6 +73,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    white-space: nowrap;
   }
 
   .brand-badge {
@@ -332,42 +333,65 @@
   }
 
   .segmented-btn {
-    padding: 10px 8px;
+    padding: 12px 6px;
     border: 1.5px solid var(--slate-200);
     background: #FFFFFF;
     border-radius: var(--radius-sm);
     font-family: inherit;
-    font-size: 0.88rem;
+    font-size: 0.95rem;
     font-weight: 600;
-    color: var(--slate-600);
+    color: var(--slate-700);
     cursor: pointer;
     transition: all 0.15s ease;
     text-align: center;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
   }
 
-  .segmented-btn:hover:not(:disabled) {
-    background: var(--slate-50);
+  .segmented-btn:focus {
+    outline: none;
   }
 
-  .segmented-btn.active-y {
-    background: var(--success);
-    border-color: var(--success);
-    color: #FFFFFF;
-    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+  /* สไตล์ปุ่มปกติเมื่อ Hover หรือ Focus (ยังไม่ได้เลือก) */
+  .segmented-btn:not(.active-y):not(.active-n):not(.active-na):hover,
+  .segmented-btn:not(.active-y):not(.active-n):not(.active-na):focus {
+    background: var(--slate-100);
+    border-color: var(--slate-300);
+    color: var(--slate-800);
   }
 
-  .segmented-btn.active-n {
-    background: var(--danger);
-    border-color: var(--danger);
-    color: #FFFFFF;
-    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+  /* สถานะเลือก: ผ่าน (Y) - สีเขียวเข้ม พื้นทึบ ตัวหนังสือขาวชัดเจน */
+  .segmented-btn.active-y,
+  .segmented-btn.active-y:hover,
+  .segmented-btn.active-y:focus,
+  .segmented-btn.active-y:active {
+    background: #10B981 !important;
+    border-color: #059669 !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4);
   }
 
-  .segmented-btn.active-na {
-    background: var(--slate-500);
-    border-color: var(--slate-500);
-    color: #FFFFFF;
-    box-shadow: 0 2px 4px rgba(100, 116, 139, 0.3);
+  /* สถานะเลือก: ไม่ผ่าน (N) - สีแดงสด พื้นทึบ ตัวหนังสือขาวชัดเจน */
+  .segmented-btn.active-n,
+  .segmented-btn.active-n:hover,
+  .segmented-btn.active-n:focus,
+  .segmented-btn.active-n:active {
+    background: #EF4444 !important;
+    border-color: #DC2626 !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+  }
+
+  /* สถานะเลือก: ไม่ตรวจ (-) - สีเทาเข้ม พื้นทึบ ตัวหนังสือขาวชัดเจน */
+  .segmented-btn.active-na,
+  .segmented-btn.active-na:hover,
+  .segmented-btn.active-na:focus,
+  .segmented-btn.active-na:active {
+    background: #64748B !important;
+    border-color: #475569 !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 2px 6px rgba(100, 116, 139, 0.4);
   }
 
   /* Sticky Bottom Bar */
