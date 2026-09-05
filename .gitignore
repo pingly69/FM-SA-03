@@ -13,9 +13,11 @@ Setup.js
 .env
 .env.*
 
-# ===== Node.js =====
+# ===== Node.js & Python =====
 node_modules/
 node_portable/
+__pycache__/
+*.pyc
 
 # ===== IDE / Editor =====
 .agents/
