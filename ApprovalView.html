@@ -1,0 +1,110 @@
+<!-- ApprovalView.html: หน้าจอคิวรออนุมัติระดับ 1 และ ระดับ 2 (FM-SA-03) -->
+<div id="approvalView" class="view-panel" style="display: none;">
+  <!-- Approver Sub-tabs -->
+  <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+    <button id="subtabL1Btn" class="btn btn-primary" style="flex: 1; padding: 10px;" onclick="ApprovalModule.switchSubtab('L1')">
+      ⏳ รออนุมัติระดับ 1 <span id="badgeL1Count" class="badge-counter" style="display:none;">0</span>
+    </button>
+    <button id="subtabL2Btn" class="btn btn-secondary" style="flex: 1; padding: 10px;" onclick="ApprovalModule.switchSubtab('L2')">
+      ⏳ รออนุมัติระดับ 2 <span id="badgeL2Count" class="badge-counter" style="display:none;">0</span>
+    </button>
+  </div>
+
+  <!-- Filter & Batch Action Bar -->
+  <div class="card" style="padding: 12px 16px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+      <div id="monthFilterContainer" style="display: flex; align-items: center; gap: 8px;">
+        <label class="form-label" style="margin: 0; font-size: 0.82rem;">ประจำเดือน:</label>
+        <input type="month" id="monthFilterInput" class="form-control" style="padding: 6px 10px; width: auto; font-size: 0.85rem;" onchange="ApprovalModule.onMonthChange(this.value)">
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <label style="font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+          <input type="checkbox" id="selectAllCheckbox" class="queue-checkbox" onchange="ApprovalModule.toggleSelectAll(this.checked)">
+          เลือกทั้งหมด
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cards List Container -->
+  <div id="approvalQueueContainer">
+    <!-- Rendered by JS_Approval -->
+  </div>
+</div>
+
+<!-- Sticky Bottom Bar for Approval Actions -->
+<div id="approvalBottomBar" class="bottom-bar" style="display: none;">
+  <div class="bottom-bar-inner">
+    <button id="btnBatchReject" class="btn btn-danger" onclick="ApprovalModule.openRejectModal()">
+      ❌ ปฏิเสธ (<span class="selected-count">0</span>)
+    </button>
+    <button id="btnBatchApprove" class="btn btn-success" onclick="ApprovalModule.openApproveModal()">
+      ✅ อนุมัติ (<span class="selected-count">0</span>)
+    </button>
+  </div>
+</div>
+
+<!-- Modal: เลือกผู้อนุมัติระดับ 2 (ตอน L1 กดอนุมัติ) -->
+<div id="modalSelectL2" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">👤 เลือกผู้อนุมัติระดับ 2 (จป.บริหาร)</div>
+    <p style="font-size: 0.88rem; color: #64748B; margin-bottom: 14px;">
+      กรุณาเลือกผู้มีอำนาจอนุมัติระดับ 2 เพื่อส่งต่อรายการที่เลือก (<span class="selected-count">0</span> รายการ) ไปพิจารณาขั้นสุดท้าย
+    </p>
+
+    <div class="form-group">
+      <label class="form-label">ผู้อนุมัติระดับ 2 <span class="required">*</span></label>
+      <select id="modalL2Select" class="form-control">
+        <option value="">-- กรุณาเลือกผู้อนุมัติระดับ 2 --</option>
+      </select>
+    </div>
+
+    <div style="display: flex; gap: 10px; margin-top: 20px;">
+      <button class="btn btn-secondary" onclick="ApprovalModule.closeModals()">ยกเลิก</button>
+      <button class="btn btn-success" onclick="ApprovalModule.confirmApproveL1()">ยืนยันอนุมัติ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: ระบุเหตุผลการปฏิเสธ (Reject Reason) -->
+<div id="modalRejectReason" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">⚠️ ระบุเหตุผลการปฏิเสธ (ตีกลับแก้ไข)</div>
+    <p style="font-size: 0.88rem; color: #64748B; margin-bottom: 14px;">
+      รายการที่เลือก (<span class="selected-count">0</span> รายการ) จะถูกส่งกลับให้ผู้บันทึกแก้ไขและส่งใหม่อีกครั้ง
+    </p>
+
+    <div class="form-group">
+      <label class="form-label">เหตุผลที่ไม่อนุมัติ / สิ่งที่ต้องแก้ไข <span class="required">*</span></label>
+      <textarea id="modalRejectReasonText" class="form-control" rows="3" placeholder="ระบุรายละเอียดเพื่อให้ผู้ตรวจนำไปปรับปรุงแก้ไข..."></textarea>
+    </div>
+
+    <div style="display: flex; gap: 10px; margin-top: 20px;">
+      <button class="btn btn-secondary" onclick="ApprovalModule.closeModals()">ยกเลิก</button>
+      <button class="btn btn-danger" onclick="ApprovalModule.confirmReject()">ยืนยันปฏิเสธ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: ดูรายละเอียดผลตรวจ Checklist รายข้อ -->
+<div id="modalViewDetails" class="modal-overlay">
+  <div class="modal-box" style="max-width: 600px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+      <div class="modal-title" style="margin: 0;">📄 รายละเอียดผลการตรวจสอบ</div>
+      <button style="border:none; background:none; font-size: 1.2rem; cursor: pointer;" onclick="ApprovalModule.closeModals()">✕</button>
+    </div>
+
+    <div id="detailMetaContent" style="font-size: 0.88rem; background: #F8FAFC; padding: 12px; border-radius: 8px; margin-bottom: 14px; border: 1px solid #E2E8F0;">
+      <!-- Populated dynamically -->
+    </div>
+
+    <div id="detailAnswersContent" style="max-height: 50vh; overflow-y: auto;">
+      <!-- Populated dynamically -->
+    </div>
+
+    <div style="margin-top: 16px; text-align: right;">
+      <button class="btn btn-secondary" style="max-width: 120px;" onclick="ApprovalModule.closeModals()">ปิด</button>
+    </div>
+  </div>
+</div>

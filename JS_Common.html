@@ -1,0 +1,173 @@
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+<script>
+var App = {
+  currentUser: null,
+  liffId: '<?= liffId ?>',
+  screenTag: '<?= screenTag ?>',
+
+  /**
+   * เริ่มต้นระบบ LIFF และดึงข้อมูลผู้ใช้งาน
+   */
+  init: function(onReady) {
+    var self = this;
+    self.showLoading('กำลังเชื่อมต่อระบบ LINE...');
+
+    if (!self.liffId) {
+      console.warn('[App] LIFF ID is not configured. Switching to Test Mode.');
+      self.initMockMode_(onReady);
+      return;
+    }
+
+    liff.init({ liffId: self.liffId })
+      .then(function() {
+        if (!liff.isLoggedIn() && liff.isInClient()) {
+          liff.login();
+          return;
+        }
+
+        if (liff.isLoggedIn()) {
+          liff.getProfile().then(function(profile) {
+            self.verifyUserOnServer_(profile.userId, profile.displayName, onReady);
+          }).catch(function(err) {
+            console.error('[App] Failed to get LINE profile:', err);
+            self.initMockMode_(onReady);
+          });
+        } else {
+          // รันบน Browser ทั่วไป นอก LINE
+          self.initMockMode_(onReady);
+        }
+      })
+      .catch(function(err) {
+        console.error('[App] LIFF init error:', err);
+        self.initMockMode_(onReady);
+      });
+  },
+
+  /**
+   * ยืนยันตัวตนกับ Central IAM Service
+   */
+  verifyUserOnServer_: function(lineUid, displayName, callback) {
+    var self = this;
+    self.showLoading('กำลังตรวจสอบสิทธิ์การใช้งาน...');
+
+    self.callServer('apiVerifyUser', lineUid)
+      .then(function(res) {
+        self.hideLoading();
+        if (res && res.success && res.data) {
+          self.currentUser = res.data;
+          self.renderUserProfileHeader_();
+          if (callback) callback(self.currentUser);
+        } else {
+          var msg = (res && res.error) ? res.error.message : 'ท่านไม่มีสิทธิ์เข้าใช้งานระบบนี้';
+          self.showAccessDeniedScreen(msg);
+        }
+      })
+      .catch(function(err) {
+        self.hideLoading();
+        self.showAccessDeniedScreen('เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์: ' + err.message);
+      });
+  },
+
+  /**
+   * โหมดจำลองผู้ใช้เมื่อเปิดเทสบน Web Browser ทั่วไป
+   */
+  initMockMode_: function(callback) {
+    var self = this;
+    var savedUid = localStorage.getItem('fm_sa03_mock_uid') || 'MOCK_DEV_USER';
+    
+    // แสดงตัวเลือกผู้ใช้จำลองสำหรับเทส
+    var mockPrompt = prompt(
+      '⚠️ คุณกำลังเปิดบน Browser ทั่วไป (นอก LINE)\n' +
+      'กรุณาระบุ LINE UID หรือใช้ค่าจำลองด้านล่างเพื่อทดสอบ:',
+      savedUid
+    );
+
+    var targetUid = mockPrompt ? mockPrompt.trim() : savedUid;
+    localStorage.setItem('fm_sa03_mock_uid', targetUid);
+
+    self.verifyUserOnServer_(targetUid, 'ผู้ทดสอบ (Test Mode)', callback);
+  },
+
+  renderUserProfileHeader_: function() {
+    var u = this.currentUser;
+    if (!u) return;
+    var nameEl = document.getElementById('headerUserName');
+    var avatarEl = document.getElementById('headerUserAvatar');
+    if (nameEl) nameEl.textContent = u.users_name || 'ผู้ใช้งาน';
+    if (avatarEl) avatarEl.textContent = (u.users_name || 'U').charAt(0);
+  },
+
+  showAccessDeniedScreen: function(msg) {
+    var container = document.getElementById('mainContentArea');
+    if (container) {
+      container.innerHTML = 
+        '<div class="card" style="text-align:center; padding: 40px 20px; margin-top: 30px;">' +
+          '<div style="font-size: 3rem; margin-bottom: 12px;">🚫</div>' +
+          '<h2 style="color: #EF4444; margin-bottom: 10px;">การเข้าถึงถูกปฏิเสธ</h2>' +
+          '<p style="color: #64748B; font-size: 0.95rem; margin-bottom: 20px;">' + (msg || 'ท่านไม่มีสิทธิ์เข้าใช้งานระบบ SA03') + '</p>' +
+          '<button class="btn btn-secondary" onclick="location.reload()" style="max-width: 200px; margin: 0 auto;">ลองใหม่อีกครั้ง</button>' +
+        '</div>';
+    }
+  },
+
+  /**
+   * Promisified wrapper สำหรับ google.script.run
+   */
+  callServer: function(fnName) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function(resolve, reject) {
+      var runner = google.script.run
+        .withSuccessHandler(function(res) {
+          resolve(res);
+        })
+        .withFailureHandler(function(err) {
+          reject(err);
+        });
+
+      if (typeof runner[fnName] !== 'function') {
+        reject(new Error('ไม่พบฟังก์ชัน ' + fnName + ' บน Server'));
+        return;
+      }
+
+      runner[fnName].apply(runner, args);
+    });
+  },
+
+  showLoading: function(text) {
+    var overlay = document.getElementById('loadingOverlay');
+    var textEl = document.getElementById('loadingText');
+    if (textEl) textEl.textContent = text || 'กำลังประมวลผล...';
+    if (overlay) overlay.classList.add('active');
+  },
+
+  hideLoading: function() {
+    var overlay = document.getElementById('loadingOverlay');
+    if (overlay) overlay.classList.remove('active');
+  },
+
+  showToast: function(message, type) {
+    var container = document.getElementById('toastContainer');
+    if (!container) return;
+
+    var toast = document.createElement('div');
+    toast.className = 'toast ' + (type || 'info');
+    
+    var icon = 'ℹ️';
+    if (type === 'success') icon = '✅';
+    if (type === 'error') icon = '❌';
+    if (type === 'warning') icon = '⚠️';
+
+    toast.innerHTML = '<span>' + icon + '</span><span>' + message + '</span>';
+    container.appendChild(toast);
+
+    setTimeout(function() {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 0.3s';
+      setTimeout(function() {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 300);
+    }, 4000);
+  }
+};
+</script>

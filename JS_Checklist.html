@@ -1,0 +1,328 @@
+<script>
+var ChecklistModule = {
+  currentData: null,
+  answers: {},
+  totalQuestionsCount: 0,
+
+  init: function() {
+    var today = this.getTodayString_();
+    var dateInput = document.getElementById('transDateInput');
+    if (dateInput) dateInput.value = today;
+    this.loadForm(today);
+  },
+
+  getTodayString_: function() {
+    var now = new Date();
+    var y = now.getFullYear();
+    var m = String(now.getMonth() + 1).padStart(2, '0');
+    var d = String(now.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + d;
+  },
+
+  onDateChange: function(newDate) {
+    if (!newDate) return;
+    this.loadForm(newDate);
+  },
+
+  loadForm: function(transDate) {
+    var self = this;
+    if (!App.currentUser) return;
+
+    App.showLoading('กำลังโหลดแบบฟอร์มตรวจสอบ...');
+    self.answers = {};
+
+    App.callServer('apiGetChecklistForm', App.currentUser.line_uid, transDate)
+      .then(function(res) {
+        App.hideLoading();
+        if (res && res.success && res.data) {
+          self.currentData = res.data;
+          self.renderForm_(res.data);
+        } else {
+          var err = (res && res.error) ? res.error.message : 'ไม่สามารถโหลดฟอร์มได้';
+          App.showToast(err, 'error');
+        }
+      })
+      .catch(function(err) {
+        App.hideLoading();
+        App.showToast('เกิดข้อผิดพลาดในการโหลดข้อมูล: ' + err.message, 'error');
+      });
+  },
+
+  renderForm_: function(data) {
+    var self = this;
+    var tx = data.transaction;
+    var isEditable = data.isEditable;
+
+    // Render Status Badge & Banner
+    self.renderStatusBanner_(tx, isEditable, data.lockReason);
+
+    // Populate Project Select
+    var pSelect = document.getElementById('projectSelect');
+    if (pSelect) {
+      pSelect.innerHTML = '<option value="">-- กรุณาเลือกโครงการ --</option>';
+      (data.projects || []).forEach(function(p) {
+        var opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        if (tx && tx.project === p) opt.selected = true;
+        pSelect.appendChild(opt);
+      });
+      pSelect.disabled = !isEditable;
+    }
+
+    // Populate L1 Approver Select
+    var aSelect = document.getElementById('approver1Select');
+    if (aSelect) {
+      aSelect.innerHTML = '<option value="">-- กรุณาเลือกผู้อนุมัติระดับ 1 --</option>';
+      (data.l1Approvers || []).forEach(function(apv) {
+        var opt = document.createElement('option');
+        opt.value = apv.users_name;
+        opt.textContent = apv.users_name + (apv.emp_no ? ' (' + apv.emp_no + ')' : '');
+        if (tx && tx.approveProfile1 === apv.users_name) opt.selected = true;
+        aSelect.appendChild(opt);
+      });
+      aSelect.disabled = !isEditable;
+    }
+
+    // Load Previous Answers
+    if (tx && tx.answers) {
+      self.answers = Object.assign({}, tx.answers);
+    }
+
+    // Render Questions
+    self.renderQuestions_(data.questions || [], isEditable);
+
+    // Update Bottom Bar
+    var btnSave = document.getElementById('btnSaveChecklist');
+    var bottomBar = document.getElementById('checklistBottomBar');
+    if (btnSave) {
+      if (!isEditable) {
+        btnSave.disabled = true;
+        btnSave.textContent = '🔒 รายการถูกล็อก (ไม่สามารถแก้ไขได้)';
+      } else if (tx && tx.status === 'REJECTED') {
+        btnSave.disabled = false;
+        btnSave.textContent = '🚀 บันทึกและส่งอนุมัติใหม่ (Resubmit #' + ((tx.resubmitCount || 0) + 1) + ')';
+      } else {
+        btnSave.disabled = false;
+        btnSave.textContent = '💾 บันทึกผลการตรวจสอบ';
+      }
+    }
+
+    self.updateProgress_();
+  },
+
+  renderStatusBanner_: function(tx, isEditable, lockReason) {
+    var banner = document.getElementById('statusNotice');
+    var badge = document.getElementById('transStatusBadge');
+    if (!banner || !badge) return;
+
+    if (!tx) {
+      badge.textContent = 'สร้างใหม่';
+      badge.style.background = '#EFF6FF';
+      badge.style.color = '#1D4ED8';
+      banner.style.display = 'none';
+      return;
+    }
+
+    if (tx.status === 'APPROVED') {
+      badge.textContent = 'อนุมัติสมบูรณ์';
+      badge.style.background = '#DCFCE7';
+      badge.style.color = '#15803D';
+
+      banner.className = 'status-banner approved';
+      banner.innerHTML = '<div><strong>✅ อนุมัติสมบูรณ์แล้ว</strong><br>' +
+        'อนุมัติระดับ 1: ' + (tx.approveProfile1 || '-') + ' (' + (tx.approve1Datetime || '') + ')<br>' +
+        'อนุมัติระดับ 2: ' + (tx.approveProfile2 || '-') + ' (' + (tx.approve2Datetime || '') + ')</div>';
+      banner.style.display = 'flex';
+
+    } else if (tx.status === 'REJECTED') {
+      badge.textContent = 'ถูกตีกลับ';
+      badge.style.background = '#FEE2E2';
+      badge.style.color = '#B91C1C';
+
+      banner.className = 'status-banner rejected';
+      banner.innerHTML = '<div><strong>⚠️ รายการนี้ถูกตีกลับให้แก้ไข</strong><br>' +
+        'เหตุผล: ' + (tx.rejectReason || 'ไม่ได้ระบุเหตุผล') + '<br>' +
+        '<small>กรุณาแก้ไขข้อมูลและกดบันทึกเพื่อส่งอนุมัติใหม่อีกครั้ง</small></div>';
+      banner.style.display = 'flex';
+
+    } else if (tx.status === 'PENDING_L2') {
+      badge.textContent = 'รออนุมัติระดับ 2';
+      badge.style.background = '#FEF3C7';
+      badge.style.color = '#B45309';
+
+      banner.className = 'status-banner pending';
+      banner.innerHTML = '<div><strong>⏳ กำลังรอผู้อนุมัติระดับ 2</strong><br>' +
+        'ผู้อนุมัติระดับ 2: ' + (tx.approveProfile2 || '-') + '<br>' +
+        'ผ่านการอนุมัติระดับ 1 เมื่อ: ' + (tx.approve1Datetime || '-') + '</div>';
+      banner.style.display = 'flex';
+
+    } else {
+      badge.textContent = 'รออนุมัติระดับ 1';
+      badge.style.background = '#FEF3C7';
+      badge.style.color = '#B45309';
+
+      banner.className = 'status-banner pending';
+      banner.innerHTML = '<div><strong>⏳ ส่งแล้ว รอผู้อนุมัติระดับ 1</strong><br>' +
+        'ผู้อนุมัติระดับ 1: ' + (tx.approveProfile1 || '-') + ' (สามารถแก้ไขได้จนกว่าจะได้รับการอนุมัติ)</div>';
+      banner.style.display = 'flex';
+    }
+  },
+
+  renderQuestions_: function(questions, isEditable) {
+    var container = document.getElementById('questionsContainer');
+    if (!container) return;
+
+    var html = '';
+    var qCount = 0;
+
+    for (var i = 0; i < questions.length; i++) {
+      var item = questions[i];
+      if (item.header_flag === 'Y') {
+        html += '<div class="section-header">📑 ' + item.item_name + '</div>';
+      } else {
+        qCount++;
+        var val = this.answers[item.record_id] || '';
+        var activeY = val === 'Y' ? 'active-y' : '';
+        var activeN = val === 'N' ? 'active-n' : '';
+        var activeNA = val === '-' ? 'active-na' : '';
+        var answeredClass = val ? 'answered' : '';
+        var disabledAttr = isEditable ? '' : 'disabled';
+
+        html += 
+          '<div id="q_card_' + item.record_id + '" class="question-card ' + answeredClass + '">' +
+            '<div class="question-text">' +
+              '<span class="question-number">' + item.record_id + '.</span> ' + item.item_name +
+            '</div>' +
+            '<div class="segmented-control">' +
+              '<button type="button" class="segmented-btn ' + activeY + '" ' + disabledAttr +
+                ' onclick="ChecklistModule.setAnswer(' + item.record_id + ', \'Y\')">✅ ปลอดภัย / มี (Y)</button>' +
+              '<button type="button" class="segmented-btn ' + activeN + '" ' + disabledAttr +
+                ' onclick="ChecklistModule.setAnswer(' + item.record_id + ', \'N\')">❌ ไม่ปลอดภัย / ไม่มี (N)</button>' +
+              '<button type="button" class="segmented-btn ' + activeNA + '" ' + disabledAttr +
+                ' onclick="ChecklistModule.setAnswer(' + item.record_id + ', \'-\')">➖ ไม่เกี่ยวข้อง (-)</button>' +
+            '</div>' +
+          '</div>';
+      }
+    }
+
+    this.totalQuestionsCount = qCount;
+    container.innerHTML = html;
+  },
+
+  setAnswer: function(recordId, value) {
+    this.answers[recordId] = value;
+
+    // Update UI card
+    var card = document.getElementById('q_card_' + recordId);
+    if (card) {
+      card.classList.add('answered');
+      var btns = card.querySelectorAll('.segmented-btn');
+      if (btns && btns.length === 3) {
+        btns[0].className = 'segmented-btn ' + (value === 'Y' ? 'active-y' : '');
+        btns[1].className = 'segmented-btn ' + (value === 'N' ? 'active-n' : '');
+        btns[2].className = 'segmented-btn ' + (value === '-' ? 'active-na' : '');
+      }
+    }
+
+    this.updateProgress_();
+  },
+
+  updateProgress_: function() {
+    var answeredCount = 0;
+    var questions = (this.currentData && this.currentData.questions) ? this.currentData.questions : [];
+
+    for (var i = 0; i < questions.length; i++) {
+      var q = questions[i];
+      if (q.header_flag === 'N') {
+        var a = this.answers[q.record_id];
+        if (a === 'Y' || a === 'N' || a === '-') {
+          answeredCount++;
+        }
+      }
+    }
+
+    var total = this.totalQuestionsCount || 1;
+    var percent = Math.round((answeredCount / total) * 100);
+
+    var textEl = document.getElementById('progressPercent');
+    var barEl = document.getElementById('progressBarFill');
+
+    if (textEl) textEl.textContent = percent + '% (' + answeredCount + '/' + total + ' ข้อ)';
+    if (barEl) barEl.style.width = percent + '%';
+  },
+
+  submitChecklist: function() {
+    var self = this;
+    if (!App.currentUser) return;
+
+    var transDate = document.getElementById('transDateInput').value;
+    var project = document.getElementById('projectSelect').value;
+    var approver1 = document.getElementById('approver1Select').value;
+
+    if (!transDate) {
+      App.showToast('กรุณาระบุวันที่ตรวจสอบ', 'warning');
+      return;
+    }
+    if (!project) {
+      App.showToast('กรุณาเลือกโครงการ', 'warning');
+      return;
+    }
+    if (!approver1) {
+      App.showToast('กรุณาเลือกผู้อนุมัติระดับ 1', 'warning');
+      return;
+    }
+
+    // ตรวจสอบว่าตอบครบทุกข้อ
+    var questions = (self.currentData && self.currentData.questions) ? self.currentData.questions : [];
+    for (var i = 0; i < questions.length; i++) {
+      var q = questions[i];
+      if (q.header_flag === 'N') {
+        var ans = self.answers[q.record_id];
+        if (ans !== 'Y' && ans !== 'N' && ans !== '-') {
+          App.showToast('กรุณาตอบคำถามข้อ ' + q.record_id + ' ให้เรียบร้อย', 'warning');
+          var card = document.getElementById('q_card_' + q.record_id);
+          if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            card.style.borderColor = '#EF4444';
+            setTimeout(function() { card.style.borderColor = ''; }, 2000);
+          }
+          return;
+        }
+      }
+    }
+
+    App.showLoading('กำลังบันทึกข้อมูล...');
+
+    var payload = {
+      lineUid: App.currentUser.line_uid,
+      transDate: transDate,
+      project: project,
+      approveProfile1: approver1,
+      answers: self.answers
+    };
+
+    var serverFn = 'apiSaveChecklist';
+    if (self.currentData && self.currentData.transaction && self.currentData.transaction.status === 'REJECTED') {
+      payload.transRecordId = self.currentData.transaction.transRecordId;
+      serverFn = 'apiResubmitChecklist';
+    }
+
+    App.callServer(serverFn, payload)
+      .then(function(res) {
+        App.hideLoading();
+        if (res && res.success) {
+          App.showToast('บันทึกข้อมูลสำเร็จเรียบร้อยแล้ว!', 'success');
+          self.loadForm(transDate);
+        } else {
+          var msg = (res && res.error) ? res.error.message : 'เกิดข้อผิดพลาดในการบันทึก';
+          App.showToast(msg, 'error');
+        }
+      })
+      .catch(function(err) {
+        App.hideLoading();
+        App.showToast('บันทึกล้มเหลว: ' + err.message, 'error');
+      });
+  }
+};
+</script>

@@ -1,0 +1,57 @@
+<!-- ChecklistView.html: หน้าจอกรอกแบบฟอร์มตรวจสอบความปลอดภัย (FM-SA-03) -->
+<div id="checklistView" class="view-panel">
+  <!-- Status Notice Banner -->
+  <div id="statusNotice" style="display: none;"></div>
+
+  <!-- Header Card: Project & Approver Selection -->
+  <div class="card">
+    <div class="card-header">
+      <span>📋 ข้อมูลการตรวจสอบ</span>
+      <span id="transStatusBadge" class="brand-badge" style="background:#E2E8F0; color:#334155;">ใหม่</span>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">วันที่ตรวจสอบ <span class="required">*</span></label>
+      <input type="date" id="transDateInput" class="form-control" onchange="ChecklistModule.onDateChange(this.value)">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">โครงการ / สถานที่ปฏิบัติงาน (Project) <span class="required">*</span></label>
+      <select id="projectSelect" class="form-control">
+        <option value="">-- กำลังโหลดรายชื่อโครงการ... --</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">ผู้อนุมัติระดับ 1 (จป.วิชาชีพ) <span class="required">*</span></label>
+      <select id="approver1Select" class="form-control">
+        <option value="">-- กำลังโหลดรายชื่อผู้อนุมัติ... --</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Progress Bar Card -->
+  <div class="progress-card">
+    <div class="progress-info">
+      <span id="progressText">ความคืบหน้าการตอบ</span>
+      <span id="progressPercent">0% (0/0)</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div id="progressBarFill" class="progress-bar-fill" style="width: 0%;"></div>
+    </div>
+  </div>
+
+  <!-- Questions Container (Rendered dynamically) -->
+  <div id="questionsContainer">
+    <!-- Rendered by JS_Checklist -->
+  </div>
+</div>
+
+<!-- Sticky Bottom Bar for Checklist Entry -->
+<div id="checklistBottomBar" class="bottom-bar">
+  <div class="bottom-bar-inner">
+    <button id="btnSaveChecklist" class="btn btn-primary" onclick="ChecklistModule.submitChecklist()">
+      💾 บันทึกผลการตรวจสอบ
+    </button>
+  </div>
+</div>

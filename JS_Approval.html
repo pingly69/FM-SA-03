@@ -1,0 +1,388 @@
+<script>
+var ApprovalModule = {
+  activeSubtab: 'L1',
+  asL1: [],
+  asL2: [],
+  l2Approvers: [],
+  selectedIds: [],
+  questionsMap: {},
+
+  init: function() {
+    var now = new Date();
+    var currentMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    var mInput = document.getElementById('monthFilterInput');
+    if (mInput) mInput.value = currentMonth;
+
+    this.loadQueue();
+  },
+
+  onMonthChange: function(val) {
+    this.loadQueue();
+  },
+
+  switchSubtab: function(tab) {
+    this.activeSubtab = tab;
+    this.selectedIds = [];
+
+    var btnL1 = document.getElementById('subtabL1Btn');
+    var btnL2 = document.getElementById('subtabL2Btn');
+    var mContainer = document.getElementById('monthFilterContainer');
+
+    if (tab === 'L1') {
+      if (btnL1) { btnL1.className = 'btn btn-primary'; }
+      if (btnL2) { btnL2.className = 'btn btn-secondary'; }
+      if (mContainer) mContainer.style.display = 'flex';
+    } else {
+      if (btnL1) { btnL1.className = 'btn btn-secondary'; }
+      if (btnL2) { btnL2.className = 'btn btn-primary'; }
+      if (mContainer) mContainer.style.display = 'none';
+    }
+
+    var selectAll = document.getElementById('selectAllCheckbox');
+    if (selectAll) selectAll.checked = false;
+
+    this.renderCards_();
+    this.updateBottomBar_();
+  },
+
+  loadQueue: function() {
+    var self = this;
+    if (!App.currentUser) return;
+
+    var month = document.getElementById('monthFilterInput') ? document.getElementById('monthFilterInput').value : '';
+    App.showLoading('กำลังโหลดรายการรออนุมัติ...');
+    self.selectedIds = [];
+
+    App.callServer('apiGetApprovalQueue', App.currentUser.line_uid, month)
+      .then(function(res) {
+        App.hideLoading();
+        if (res && res.success && res.data) {
+          self.asL1 = res.data.asL1 || [];
+          self.asL2 = res.data.asL2 || [];
+          self.l2Approvers = res.data.l2Approvers || [];
+
+          self.updateBadges_();
+          self.renderCards_();
+          self.updateBottomBar_();
+        } else {
+          var msg = (res && res.error) ? res.error.message : 'ไม่สามารถโหลดคิวอนุมัติได้';
+          App.showToast(msg, 'error');
+        }
+      })
+      .catch(function(err) {
+        App.hideLoading();
+        App.showToast('เกิดข้อผิดพลาดในการโหลดคิวอนุมัติ: ' + err.message, 'error');
+      });
+  },
+
+  updateBadges_: function() {
+    var b1 = document.getElementById('badgeL1Count');
+    var b2 = document.getElementById('badgeL2Count');
+    var topBadge = document.getElementById('approvalQueueBadge');
+
+    var c1 = this.asL1.length;
+    var c2 = this.asL2.length;
+    var total = c1 + c2;
+
+    if (b1) {
+      b1.textContent = c1;
+      b1.style.display = c1 > 0 ? 'inline-block' : 'none';
+    }
+    if (b2) {
+      b2.textContent = c2;
+      b2.style.display = c2 > 0 ? 'inline-block' : 'none';
+    }
+    if (topBadge) {
+      topBadge.textContent = total;
+      topBadge.style.display = total > 0 ? 'inline-block' : 'none';
+    }
+  },
+
+  renderCards_: function() {
+    var container = document.getElementById('approvalQueueContainer');
+    if (!container) return;
+
+    var list = this.activeSubtab === 'L1' ? this.asL1 : this.asL2;
+
+    if (list.length === 0) {
+      container.innerHTML = 
+        '<div class="card" style="text-align:center; padding: 40px 20px; color: #64748B;">' +
+          '<div style="font-size: 2.5rem; margin-bottom: 8px;">🎉</div>' +
+          '<div style="font-weight: 600; font-size: 1rem;">ไม่มีรายการคอยอนุมัติในขณะนี้</div>' +
+          '<div style="font-size: 0.85rem; margin-top: 4px;">รายการทั้งหมดได้รับการดำเนินการเรียบร้อยแล้ว</div>' +
+        '</div>';
+      return;
+    }
+
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i];
+      var isChecked = this.selectedIds.indexOf(item.transRecordId) !== -1;
+      var answersCount = item.answers ? Object.keys(item.answers).length : 0;
+
+      html += 
+        '<div class="queue-card">' +
+          '<div class="queue-card-top">' +
+            '<div style="display: flex; align-items: center; gap: 10px;">' +
+              '<input type="checkbox" class="queue-checkbox" ' + (isChecked ? 'checked' : '') +
+                ' onchange="ApprovalModule.toggleSelect(' + item.transRecordId + ', this.checked)">' +
+              '<div>' +
+                '<div class="queue-project">' + (item.project || 'ไม่ระบุโครงการ') + '</div>' +
+                '<div class="queue-date">📅 วันที่ตรวจ: ' + item.transDate + '</div>' +
+              '</div>' +
+            '</div>' +
+            '<span class="brand-badge" style="background:#EFF6FF; color:#1D4ED8;">ID: ' + item.transRecordId + '</span>' +
+          '</div>' +
+
+          '<div class="queue-meta">' +
+            '<span>👤 ผู้ตรวจ: <strong>' + (item.lineUid || '-') + '</strong></span>' +
+            '<span>📝 ตอบแล้ว: <strong>' + answersCount + ' ข้อ</strong></span>' +
+            (item.resubmitCount > 0 ? '<span style="color:#B91C1C;">🔄 ตีกลับแล้ว ' + item.resubmitCount + ' ครั้ง</span>' : '') +
+          '</div>' +
+
+          '<div class="queue-actions">' +
+            '<button class="btn btn-secondary" style="flex:1; padding: 8px;" onclick="ApprovalModule.viewDetails(' + item.transRecordId + ')">' +
+              '🔍 ดูรายละเอียดผลตรวจ' +
+            '</button>' +
+          '</div>' +
+        '</div>';
+    }
+
+    container.innerHTML = html;
+  },
+
+  toggleSelect: function(recordId, checked) {
+    var idx = this.selectedIds.indexOf(recordId);
+    if (checked && idx === -1) {
+      this.selectedIds.push(recordId);
+    } else if (!checked && idx !== -1) {
+      this.selectedIds.splice(idx, 1);
+    }
+    this.updateBottomBar_();
+  },
+
+  toggleSelectAll: function(checked) {
+    var list = this.activeSubtab === 'L1' ? this.asL1 : this.asL2;
+    this.selectedIds = [];
+    if (checked) {
+      for (var i = 0; i < list.length; i++) {
+        this.selectedIds.push(list[i].transRecordId);
+      }
+    }
+
+    var checkboxes = document.querySelectorAll('.queue-card .queue-checkbox');
+    checkboxes.forEach(function(cb) { cb.checked = checked; });
+
+    this.updateBottomBar_();
+  },
+
+  updateBottomBar_: function() {
+    var bar = document.getElementById('approvalBottomBar');
+    var countEls = document.querySelectorAll('.selected-count');
+    var count = this.selectedIds.length;
+
+    countEls.forEach(function(el) { el.textContent = count; });
+
+    if (bar) {
+      bar.style.display = count > 0 ? 'flex' : 'none';
+    }
+  },
+
+  openApproveModal: function() {
+    if (this.selectedIds.length === 0) return;
+
+    if (this.activeSubtab === 'L1') {
+      var select = document.getElementById('modalL2Select');
+      if (select) {
+        select.innerHTML = '<option value="">-- กรุณาเลือกผู้อนุมัติระดับ 2 --</option>';
+        (this.l2Approvers || []).forEach(function(apv) {
+          var opt = document.createElement('option');
+          opt.value = apv.users_name;
+          opt.textContent = apv.users_name + (apv.emp_no ? ' (' + apv.emp_no + ')' : '');
+          select.appendChild(opt);
+        });
+      }
+      document.getElementById('modalSelectL2').classList.add('active');
+    } else {
+      // L2 Direct Approval
+      if (confirm('ยืนยันอนุมัติรายการที่เลือกทั้งหมด ' + this.selectedIds.length + ' รายการ?')) {
+        this.confirmApproveL2_();
+      }
+    }
+  },
+
+  confirmApproveL1: function() {
+    var select = document.getElementById('modalL2Select');
+    var l2Approver = select ? select.value : '';
+
+    if (!l2Approver) {
+      App.showToast('กรุณาเลือกผู้อนุมัติระดับ 2 ก่อนดำเนินการ', 'warning');
+      return;
+    }
+
+    var self = this;
+    App.showLoading('กำลังดำเนินการอนุมัติระดับ 1...');
+
+    var payload = {
+      lineUid: App.currentUser.line_uid,
+      level: 1,
+      transRecordIds: self.selectedIds,
+      approveProfile2: l2Approver
+    };
+
+    App.callServer('apiApproveAction', payload)
+      .then(function(res) {
+        App.hideLoading();
+        self.closeModals();
+        if (res && res.success) {
+          App.showToast('อนุมัติระดับ 1 สำเร็จ (' + res.data.updatedCount + ' รายการ) ส่งต่อไปยัง L2 แล้ว', 'success');
+          self.loadQueue();
+        } else {
+          var msg = (res && res.error) ? res.error.message : 'เกิดข้อผิดพลาดในการอนุมัติ';
+          App.showToast(msg, 'error');
+        }
+      })
+      .catch(function(err) {
+        App.hideLoading();
+        App.showToast('อนุมัติล้มเหลว: ' + err.message, 'error');
+      });
+  },
+
+  confirmApproveL2_: function() {
+    var self = this;
+    App.showLoading('กำลังดำเนินการอนุมัติระดับ 2 (เสร็จสิ้น)...');
+
+    var payload = {
+      lineUid: App.currentUser.line_uid,
+      level: 2,
+      transRecordIds: self.selectedIds
+    };
+
+    App.callServer('apiApproveAction', payload)
+      .then(function(res) {
+        App.hideLoading();
+        if (res && res.success) {
+          App.showToast('อนุมัติสมบูรณ์เรียบร้อยแล้ว (' + res.data.updatedCount + ' รายการ)', 'success');
+          self.loadQueue();
+        } else {
+          var msg = (res && res.error) ? res.error.message : 'เกิดข้อผิดพลาดในการอนุมัติ';
+          App.showToast(msg, 'error');
+        }
+      })
+      .catch(function(err) {
+        App.hideLoading();
+        App.showToast('อนุมัติล้มเหลว: ' + err.message, 'error');
+      });
+  },
+
+  openRejectModal: function() {
+    if (this.selectedIds.length === 0) return;
+    document.getElementById('modalRejectReasonText').value = '';
+    document.getElementById('modalRejectReason').classList.add('active');
+  },
+
+  confirmReject: function() {
+    var reason = document.getElementById('modalRejectReasonText').value.trim();
+    if (!reason) {
+      App.showToast('กรุณาระบุเหตุผลการปฏิเสธเพื่อให้ผู้ตรวจนำไปแก้ไข', 'warning');
+      return;
+    }
+
+    var self = this;
+    App.showLoading('กำลังส่งข้อมูลการปฏิเสธ...');
+
+    var payload = {
+      lineUid: App.currentUser.line_uid,
+      level: self.activeSubtab === 'L1' ? 1 : 2,
+      transRecordIds: self.selectedIds,
+      reason: reason
+    };
+
+    App.callServer('apiRejectAction', payload)
+      .then(function(res) {
+        App.hideLoading();
+        self.closeModals();
+        if (res && res.success) {
+          App.showToast('ปฏิเสธรายการเรียบร้อยแล้ว (' + res.data.updatedCount + ' รายการ) ตีกลับให้ผู้ตรวจแก้ไข', 'warning');
+          self.loadQueue();
+        } else {
+          var msg = (res && res.error) ? res.error.message : 'เกิดข้อผิดพลาดในการปฏิเสธ';
+          App.showToast(msg, 'error');
+        }
+      })
+      .catch(function(err) {
+        App.hideLoading();
+        App.showToast('ปฏิเสธล้มเหลว: ' + err.message, 'error');
+      });
+  },
+
+  viewDetails: function(recordId) {
+    var list = this.activeSubtab === 'L1' ? this.asL1 : this.asL2;
+    var target = null;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].transRecordId === recordId) {
+        target = list[i];
+        break;
+      }
+    }
+    if (!target) return;
+
+    var metaEl = document.getElementById('detailMetaContent');
+    if (metaEl) {
+      metaEl.innerHTML = 
+        '<div><strong>โครงการ:</strong> ' + (target.project || '-') + '</div>' +
+        '<div><strong>วันที่ตรวจ:</strong> ' + target.transDate + ' | <strong>เวลาบันทึก:</strong> ' + (target.createDatetime || '-') + '</div>' +
+        '<div><strong>ผู้ตรวจ:</strong> ' + (target.lineUid || '-') + '</div>' +
+        '<div><strong>ผู้อนุมัติ L1:</strong> ' + (target.approveProfile1 || '-') + '</div>' +
+        (target.approveProfile2 ? '<div><strong>ผู้อนุมัติ L2:</strong> ' + target.approveProfile2 + '</div>' : '');
+    }
+
+    var ansEl = document.getElementById('detailAnswersContent');
+    if (ansEl) {
+      var answers = target.answers || {};
+      var keys = Object.keys(answers);
+
+      if (keys.length === 0) {
+        ansEl.innerHTML = '<div style="color:#64748B; padding:10px;">ไม่มีข้อมูลคำตอบ</div>';
+      } else {
+        var html = '<table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">' +
+          '<tr style="background:#F1F5F9; text-align:left; border-bottom: 2px solid #CBD5E1;">' +
+            '<th style="padding: 8px 10px; width: 60px;">ข้อที่</th>' +
+            '<th style="padding: 8px 10px;">ผลการตรวจสอบ</th>' +
+          '</tr>';
+
+        keys.sort(function(a, b) { return Number(a) - Number(b); });
+
+        for (var k = 0; k < keys.length; k++) {
+          var qId = keys[k];
+          var ans = answers[qId];
+          var badgeHtml = '';
+
+          if (ans === 'Y') {
+            badgeHtml = '<span style="background:#DCFCE7; color:#15803D; font-weight:700; padding:2px 8px; border-radius:4px;">✅ ปลอดภัย (Y)</span>';
+          } else if (ans === 'N') {
+            badgeHtml = '<span style="background:#FEE2E2; color:#B91C1C; font-weight:700; padding:2px 8px; border-radius:4px;">❌ ไม่ปลอดภัย (N)</span>';
+          } else {
+            badgeHtml = '<span style="background:#E2E8F0; color:#475569; font-weight:600; padding:2px 8px; border-radius:4px;">➖ ไม่เกี่ยวข้อง (-)</span>';
+          }
+
+          html += '<tr style="border-bottom: 1px solid #E2E8F0;">' +
+            '<td style="padding: 8px 10px; font-weight: 600; color: #2563EB;">ข้อ ' + qId + '</td>' +
+            '<td style="padding: 8px 10px;">' + badgeHtml + '</td>' +
+          '</tr>';
+        }
+
+        html += '</table>';
+        ansEl.innerHTML = html;
+      }
+    }
+
+    document.getElementById('modalViewDetails').classList.add('active');
+  },
+
+  closeModals: function() {
+    var modals = document.querySelectorAll('.modal-overlay');
+    modals.forEach(function(m) { m.classList.remove('active'); });
+  }
+};
+</script>

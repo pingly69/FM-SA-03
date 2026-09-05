@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>FM-SA-03 | แบบตรวจความปลอดภัยประจำวัน & อนุมัติ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <?!= include('CSS_Common'); ?>
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="header-top">
+      <div class="brand-title">
+        <span>🛡️ FM-SA-03</span>
+        <span class="brand-badge">Safety Checklist</span>
+      </div>
+      <div class="user-profile">
+        <div id="headerUserAvatar" class="user-avatar">?</div>
+        <span id="headerUserName">กำลังโหลด...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <nav class="nav-tabs">
+    <button id="navTabChecklist" class="tab-btn active" onclick="Navigation.switchTab('checklist')">
+      <span>📝 บันทึกการตรวจ</span>
+    </button>
+    <button id="navTabApproval" class="tab-btn" onclick="Navigation.switchTab('approval')">
+      <span>⚖️ คิวอนุมัติ</span>
+      <span id="approvalQueueBadge" class="badge-counter" style="display:none;">0</span>
+    </button>
+  </nav>
+
+  <!-- Main Content Container -->
+  <main id="mainContentArea" class="main-container">
+    <?!= include('ChecklistView'); ?>
+    <?!= include('ApprovalView'); ?>
+  </main>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="spinner"></div>
+    <div id="loadingText">กำลังประมวลผล...</div>
+  </div>
+
+  <!-- Scripts -->
+  <?!= include('JS_Common'); ?>
+  <?!= include('JS_Checklist'); ?>
+  <?!= include('JS_Approval'); ?>
+
+  <script>
+    var Navigation = {
+      currentTab: 'checklist',
+
+      switchTab: function(tab) {
+        this.currentTab = tab;
+        var btnChecklist = document.getElementById('navTabChecklist');
+        var btnApproval = document.getElementById('navTabApproval');
+        var viewChecklist = document.getElementById('checklistView');
+        var viewApproval = document.getElementById('approvalView');
+        var barChecklist = document.getElementById('checklistBottomBar');
+        var barApproval = document.getElementById('approvalBottomBar');
+
+        if (tab === 'checklist') {
+          if (btnChecklist) btnChecklist.classList.add('active');
+          if (btnApproval) btnApproval.classList.remove('active');
+          if (viewChecklist) viewChecklist.style.display = 'block';
+          if (viewApproval) viewApproval.style.display = 'none';
+          if (barChecklist) barChecklist.style.display = 'flex';
+          if (barApproval) barApproval.style.display = 'none';
+          ChecklistModule.init();
+        } else {
+          if (btnChecklist) btnChecklist.classList.remove('active');
+          if (btnApproval) btnApproval.classList.add('active');
+          if (viewChecklist) viewChecklist.style.display = 'none';
+          if (viewApproval) viewApproval.style.display = 'block';
+          if (barChecklist) barChecklist.style.display = 'none';
+          ApprovalModule.init();
+        }
+      }
+    };
+
+    // Bootstrap Lifecycle
+    window.addEventListener('DOMContentLoaded', function() {
+      App.init(function(user) {
+        // เริ่มต้นที่หน้า Checklist
+        ChecklistModule.init();
+
+        // ตรวจสอบคิวอนุมัติเบื้องหลังเพื่อขึ้นตัวเลข Badge ทันที
+        if (user && user.line_uid) {
+          App.callServer('apiGetApprovalQueue', user.line_uid)
+            .then(function(res) {
+              if (res && res.success && res.data) {
+                var total = (res.data.asL1 ? res.data.asL1.length : 0) + (res.data.asL2 ? res.data.asL2.length : 0);
+                var badge = document.getElementById('approvalQueueBadge');
+                if (badge) {
+                  badge.textContent = total;
+                  badge.style.display = total > 0 ? 'inline-block' : 'none';
+                }
+              }
+            }).catch(function(e) {
+              console.warn('[Badge] queue check error:', e);
+            });
+        }
+      });
+    });
+  </script>
+</body>
+</html>
