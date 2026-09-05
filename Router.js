@@ -1,12 +1,36 @@
 /**
  * Router.js - จุดรับ Request กลางของ Web App (doGet & doPost)
- * จัดการการเรนเดอร์หน้าเว็บ LIFF และ API Router กลาง
+ * รองรับทั้งการเรนเดอร์ใน Apps Script และการเรียก Web API (JSON RPC) จาก GitHub Pages
  */
 
 /**
- * ฟังก์ชันเรนเดอร์ Web App หน้าแรก
+ * ฟังก์ชันรับ GET Request
+ * - หากมี query parameter ?action=... จะทำงานเป็น JSON API
+ * - หากไม่มี จะเรนเดอร์ Web App HTML
  */
 function doGet(e) {
+  if (e && e.parameter && e.parameter.action) {
+    var action = e.parameter.action;
+    var result = null;
+    try {
+      if (action === 'verifyUser') {
+        result = apiVerifyUser(e.parameter.lineUid);
+      } else if (action === 'getChecklistForm') {
+        result = apiGetChecklistForm(e.parameter.lineUid, e.parameter.transDate);
+      } else if (action === 'getApprovalQueue') {
+        result = apiGetApprovalQueue(e.parameter.lineUid, e.parameter.monthFilter);
+      } else {
+        result = ResponseUtils.fail('INVALID_ACTION', 'Action ไม่ถูกต้อง: ' + action);
+      }
+    } catch (err) {
+      result = ResponseUtils.fail('GET_ERROR', err.message);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // HTML Web App Mode
   var template = HtmlService.createTemplateFromFile('Index');
   template.liffId = Config.getLiffId();
   template.screenTag = Config.getScreenTag();
@@ -18,18 +42,28 @@ function doGet(e) {
 }
 
 /**
- * Helper สำหรับ Include HTML partials เช่น CSS_Common, JS_Common
+ * Helper สำหรับ Include HTML partials ใน Apps Script
  */
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
 /**
- * รับ POST Request สำหรับ Web API ภายนอก (ถ้ามี)
+ * รับ POST Request สำหรับ Web API จาก GitHub Pages หรือภายนอก
  */
 function doPost(e) {
   try {
-    var body = e.postData ? JSON.parse(e.postData.contents) : {};
+    var body = {};
+    if (e && e.postData && e.postData.contents) {
+      try {
+        body = JSON.parse(e.postData.contents);
+      } catch (ex) {
+        body = e.parameter || {};
+      }
+    } else if (e && e.parameter) {
+      body = e.parameter;
+    }
+
     var action = body.action || '';
     var result = null;
 
@@ -39,6 +73,8 @@ function doPost(e) {
       result = apiGetChecklistForm(body.lineUid, body.transDate);
     } else if (action === 'saveChecklist') {
       result = apiSaveChecklist(body);
+    } else if (action === 'resubmitChecklist') {
+      result = apiResubmitChecklist(body);
     } else if (action === 'getApprovalQueue') {
       result = apiGetApprovalQueue(body.lineUid, body.monthFilter);
     } else if (action === 'approveAction') {
