@@ -33,11 +33,7 @@ function doGet(e) {
   }
 
   // HTML Web App Mode
-  var template = HtmlService.createTemplateFromFile('Index');
-  template.liffId = Config.getLiffId();
-  template.screenTag = Config.getScreenTag();
-
-  return template.evaluate()
+  return HtmlService.createHtmlOutputFromFile('index')
     .setTitle('FM-SA-03 | แบบตรวจความปลอดภัย & อนุมัติ')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);

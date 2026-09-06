@@ -788,37 +788,85 @@
       liffId: '2009016720-NiJ6Jzhp',
       screenTag: 'SA03',
       gasUrl: 'https://script.google.com/macros/s/AKfycbzT-c6Lv1Zjaw4vKkOEHj7vjxN8TC86SLBX2zGPD-QKvg1UC2CcO_HlTTOyUIRa2fK1xg/exec',
+      _loadingTimer: null,
 
       init: function(onReady) {
         var self = this;
         self.showLoading('กำลังเชื่อมต่อระบบ LINE...');
 
-        if (!self.liffId) {
-          self.initMockMode_(onReady);
+        // ตรวจสอบ LIFF ID หากไม่มีให้ใช้ค่าเริ่มต้น
+        if (!self.liffId || self.liffId.length < 5) {
+          self.liffId = '2009016720-NiJ6Jzhp';
+        }
+
+        // ตรวจสอบพารามิเตอร์ทดสอบเฉพาะสำหรับนักพัฒนา (?mock=true หรือเปิดบน localhost)
+        var urlParams = new URLSearchParams(window.location.search);
+        var isMockDev = urlParams.get('mock') === 'true' || window.location.hostname === 'localhost';
+        if (isMockDev) {
+          var devUid = urlParams.get('mockUid') || localStorage.getItem('fm_sa03_mock_uid') || 'MOCK_DEV_USER';
+          console.log('[App] Dev Mock Mode activated for UID:', devUid);
+          self.verifyUserOnServer_(devUid, 'ผู้ทดสอบ (Test Mode)', onReady);
+          return;
+        }
+
+        if (typeof liff === 'undefined') {
+          console.error('[App] LIFF SDK is not loaded');
+          self.hideLoading();
+          self.showAccessDeniedScreen('ไม่พบ LINE LIFF SDK กรุณาเปิดผ่านแอปพลิเคชัน LINE หรือรีเฟรชหน้านี้');
           return;
         }
 
         liff.init({ liffId: self.liffId })
           .then(function() {
-            if (!liff.isLoggedIn() && liff.isInClient()) {
-              liff.login();
+            // หากยังไม่ได้ล็อกอิน
+            if (!liff.isLoggedIn()) {
+              // ตรวจสอบว่ากำลังทำงานอยู่ใน iframe (เช่น บน Google Apps Script Web App) หรือไม่
+              var isInIframe = false;
+              try {
+                isInIframe = (window.self !== window.top);
+              } catch (e) {
+                isInIframe = true;
+              }
+
+              if (isInIframe) {
+                // หากอยู่ใน iframe ห้ามเรียก liff.login() ใน iframe เพราะ LINE Login ไม่อนุญาตให้แสดงใน iframe (X-Frame-Options: DENY)
+                self.hideLoading();
+                self.showAccessDeniedScreen(
+                  'กรุณาเข้าใช้งานผ่าน LINE LIFF เพื่อความปลอดภัยและการยืนยันตัวตนที่ถูกต้อง<br><br>' +
+                  '<a href="https://liff.line.me/' + self.liffId + '" target="_top" class="btn btn-primary" style="display:inline-block; text-decoration:none; padding:12px 24px; font-weight:600; border-radius:8px;">เปิดผ่าน LINE LIFF</a>'
+                );
+                return;
+              }
+
+              // ถ้ารันที่ Top Window (เช่น บน GitHub Pages หรือ Browser ทั่วไป) สามารถเรียก LINE Login ได้ตามปกติ
+              console.log('[App] User is not logged in. Initiating LINE Login...');
+              liff.login({ redirectUri: window.location.href });
               return;
             }
 
-            if (liff.isLoggedIn()) {
-              liff.getProfile().then(function(profile) {
-                self.verifyUserOnServer_(profile.userId, profile.displayName, onReady);
-              }).catch(function(err) {
+            // เมื่อล็อกอินแล้ว ดึงข้อมูลผู้ใช้งานจริงจาก LINE Profile
+            liff.getProfile()
+              .then(function(profile) {
+                if (profile && profile.userId) {
+                  self.verifyUserOnServer_(profile.userId, profile.displayName, onReady);
+                } else {
+                  throw new Error('ไม่พบข้อมูลผู้ใช้งานจาก LINE');
+                }
+              })
+              .catch(function(err) {
                 console.error('[App] Failed to get LINE profile:', err);
-                self.initMockMode_(onReady);
+                self.hideLoading();
+                self.showAccessDeniedScreen('ไม่สามารถดึงข้อมูลโปรไฟล์ LINE ได้ กรุณาลองใหม่อีกครั้ง');
               });
-            } else {
-              self.initMockMode_(onReady);
-            }
           })
           .catch(function(err) {
             console.error('[App] LIFF init error:', err);
-            self.initMockMode_(onReady);
+            self.hideLoading();
+            self.showAccessDeniedScreen(
+              'ไม่สามารถเชื่อมต่อระบบ LINE ได้<br>' +
+              '<small style="color:#94A3B8; font-size:0.85rem;">' + (err.message || err) + '</small><br><br>' +
+              '<a href="https://liff.line.me/' + self.liffId + '" target="_top" class="btn btn-primary" style="display:inline-block; text-decoration:none; margin-top:10px;">เปิดผ่านแอปพลิเคชัน LINE</a>'
+            );
           });
       },
 
@@ -840,22 +888,8 @@
           })
           .catch(function(err) {
             self.hideLoading();
-            self.showAccessDeniedScreen('เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์: ' + err.message);
+            self.showAccessDeniedScreen('เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์: ' + (err.message || err));
           });
-      },
-
-      initMockMode_: function(callback) {
-        var self = this;
-        var savedUid = localStorage.getItem('fm_sa03_mock_uid') || 'MOCK_DEV_USER';
-        var mockPrompt = prompt(
-          '⚠️ คุณกำลังเปิดบน Browser ทั่วไป (นอก LINE)\n' +
-          'กรุณาระบุ LINE UID หรือใช้ค่าจำลองด้านล่างเพื่อทดสอบ:',
-          savedUid
-        );
-        var targetUid = mockPrompt ? mockPrompt.trim() : savedUid;
-        localStorage.setItem('fm_sa03_mock_uid', targetUid);
-
-        self.verifyUserOnServer_(targetUid, 'ผู้ทดสอบ (Test Mode)', callback);
       },
 
       renderUserProfileHeader_: function() {
@@ -886,14 +920,24 @@
 
         if (typeof google !== 'undefined' && google.script && google.script.run) {
           return new Promise(function(resolve, reject) {
-            var runner = google.script.run
-              .withSuccessHandler(resolve)
-              .withFailureHandler(reject);
+            try {
+              var runner = google.script.run
+                .withSuccessHandler(resolve)
+                .withFailureHandler(function(err) {
+                  console.error('[GAS Error]', fnName, err);
+                  reject(err);
+                });
 
-            if (typeof runner[fnName] === 'function') {
-              runner[fnName].apply(runner, args);
-            } else {
-              reject(new Error('ไม่พบฟังก์ชัน ' + fnName + ' บน Server'));
+              if (runner && typeof runner[fnName] === 'function') {
+                runner[fnName].apply(runner, args);
+              } else if (runner) {
+                runner[fnName].apply(runner, args);
+              } else {
+                reject(new Error('google.script.run ไม่พร้อมใช้งาน'));
+              }
+            } catch (ex) {
+              console.error('[GAS Exception fallback to Web API]', fnName, ex);
+              self.callGasApi_(fnName, args).then(resolve).catch(reject);
             }
           });
         } else {
@@ -940,22 +984,40 @@
           body: JSON.stringify(body)
         })
         .then(function(res) {
+          if (!res.ok) {
+            throw new Error('HTTP Status ' + res.status);
+          }
           return res.json();
         })
         .catch(function(err) {
           console.error('[App] GAS API Call Error:', err);
-          throw new Error('ไม่สามารถติดต่อ Google Apps Script Server ได้: ' + err.message);
+          throw new Error('ไม่สามารถติดต่อเซิร์ฟเวอร์ได้: ' + err.message);
         });
       },
 
       showLoading: function(text) {
+        var self = this;
         var overlay = document.getElementById('loadingOverlay');
         var textEl = document.getElementById('loadingText');
         if (textEl) textEl.textContent = text || 'กำลังประมวลผล...';
         if (overlay) overlay.classList.add('active');
+
+        // Safety timeout ป้องกันหน้าจอหมุนค้างเกิน 25 วินาที
+        if (self._loadingTimer) clearTimeout(self._loadingTimer);
+        self._loadingTimer = setTimeout(function() {
+          if (overlay && overlay.classList.contains('active')) {
+            self.hideLoading();
+            self.showToast('การโหลดใช้เวลานานกว่าปกติ กรุณาลองใหม่อีกครั้ง', 'warning');
+          }
+        }, 25000);
       },
 
       hideLoading: function() {
+        var self = this;
+        if (self._loadingTimer) {
+          clearTimeout(self._loadingTimer);
+          self._loadingTimer = null;
+        }
         var overlay = document.getElementById('loadingOverlay');
         if (overlay) overlay.classList.remove('active');
       },
@@ -1863,19 +1925,22 @@
         ChecklistModule.init();
 
         if (user && user.line_uid) {
-          App.callServer('apiGetApprovalQueue', user.line_uid)
-            .then(function(res) {
-              if (res && res.success && res.data) {
-                var total = (res.data.asL1 ? res.data.asL1.length : 0) + (res.data.asL2 ? res.data.asL2.length : 0);
-                var badge = document.getElementById('approvalQueueBadge');
-                if (badge) {
-                  badge.textContent = total;
-                  badge.style.display = total > 0 ? 'inline-block' : 'none';
+          // ตรวจสอบคิวอนุมัติหลังจากโหลดหน้าหลักเล็กน้อย เพื่อไม่ให้เกิด lock contention กับ apiGetChecklistForm
+          setTimeout(function() {
+            App.callServer('apiGetApprovalQueue', user.line_uid)
+              .then(function(res) {
+                if (res && res.success && res.data) {
+                  var total = (res.data.asL1 ? res.data.asL1.length : 0) + (res.data.asL2 ? res.data.asL2.length : 0);
+                  var badge = document.getElementById('approvalQueueBadge');
+                  if (badge) {
+                    badge.textContent = total;
+                    badge.style.display = total > 0 ? 'inline-block' : 'none';
+                  }
                 }
-              }
-            }).catch(function(e) {
-              console.warn('[Badge] queue check error:', e);
-            });
+              }).catch(function(e) {
+                console.warn('[Badge] queue check error:', e);
+              });
+          }, 1500);
         }
       });
     });
