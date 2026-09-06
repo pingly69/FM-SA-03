@@ -4,7 +4,9 @@
  */
 
 var TransactionRepo = (function() {
-  var SHEET_NAME = 'FMSA03_TRANSACTION';
+  function getSheetName_() {
+    return Config.getTransactionSheetName();
+  }
 
   var COLS = [
     'TRANS_RECORD_ID',
@@ -28,9 +30,10 @@ var TransactionRepo = (function() {
   function getSheet_() {
     var ssId = Config.getSpreadsheetId();
     var ss = SpreadsheetApp.openById(ssId);
-    var sheet = ss.getSheetByName(SHEET_NAME);
+    var sheetName = getSheetName_();
+    var sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
-      throw new Error('ไม่พบชีต ' + SHEET_NAME + ' ใน Spreadsheet ID: ' + ssId);
+      throw new Error('ไม่พบชีต ' + sheetName + ' ใน Spreadsheet ID: ' + ssId);
     }
     return sheet;
   }

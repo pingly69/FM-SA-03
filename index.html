@@ -1209,23 +1209,27 @@
         self.updateProgress_();
       },
 
-      CACHE_KEYS: {
-        QUESTIONS: 'FMSA03_LOCAL_QUESTIONS',
-        PROJECTS: 'FMSA03_LOCAL_PROJECTS',
-        TIME: 'FMSA03_LOCAL_CACHE_TIME'
+      getCacheKeys_: function() {
+        var tag = (window.App && window.App.screenTag) ? String(window.App.screenTag).trim() : 'SA03';
+        return {
+          QUESTIONS: 'FM_' + tag + '_LOCAL_QUESTIONS',
+          PROJECTS: 'CENTRAL_SITE_PROJECTS',
+          TIME: 'FM_' + tag + '_LOCAL_CACHE_TIME'
+        };
       },
       CACHE_TTL_MS: 24 * 60 * 60 * 1000, // 24 ชั่วโมง (24 Hours)
 
       getLocalCache_: function() {
         try {
-          var timeStr = localStorage.getItem(this.CACHE_KEYS.TIME);
+          var keys = this.getCacheKeys_();
+          var timeStr = localStorage.getItem(keys.TIME);
           if (!timeStr) return null;
           var age = Date.now() - Number(timeStr);
           if (isNaN(age) || age > this.CACHE_TTL_MS || age < 0) {
             return null;
           }
-          var qRaw = localStorage.getItem(this.CACHE_KEYS.QUESTIONS);
-          var pRaw = localStorage.getItem(this.CACHE_KEYS.PROJECTS);
+          var qRaw = localStorage.getItem(keys.QUESTIONS);
+          var pRaw = localStorage.getItem(keys.PROJECTS);
           if (!qRaw || !pRaw) return null;
 
           var questions = JSON.parse(qRaw);
@@ -1246,13 +1250,14 @@
 
       setLocalCache_: function(questions, projects) {
         try {
+          var keys = this.getCacheKeys_();
           if (Array.isArray(questions) && questions.length > 0) {
-            localStorage.setItem(this.CACHE_KEYS.QUESTIONS, JSON.stringify(questions));
+            localStorage.setItem(keys.QUESTIONS, JSON.stringify(questions));
           }
           if (Array.isArray(projects) && projects.length > 0) {
-            localStorage.setItem(this.CACHE_KEYS.PROJECTS, JSON.stringify(projects));
+            localStorage.setItem(keys.PROJECTS, JSON.stringify(projects));
           }
-          localStorage.setItem(this.CACHE_KEYS.TIME, String(Date.now()));
+          localStorage.setItem(keys.TIME, String(Date.now()));
         } catch (e) {
           console.warn('[ChecklistModule] setLocalCache_ error:', e);
         }
@@ -1260,9 +1265,14 @@
 
       clearLocalCache_: function() {
         try {
-          localStorage.removeItem(this.CACHE_KEYS.QUESTIONS);
-          localStorage.removeItem(this.CACHE_KEYS.PROJECTS);
-          localStorage.removeItem(this.CACHE_KEYS.TIME);
+          var keys = this.getCacheKeys_();
+          localStorage.removeItem(keys.QUESTIONS);
+          localStorage.removeItem(keys.PROJECTS);
+          localStorage.removeItem(keys.TIME);
+          // เคลียร์คีย์เวอร์ชันเดิม (ถ้ามี)
+          localStorage.removeItem('FMSA03_LOCAL_QUESTIONS');
+          localStorage.removeItem('FMSA03_LOCAL_PROJECTS');
+          localStorage.removeItem('FMSA03_LOCAL_CACHE_TIME');
         } catch (e) {
           console.warn('[ChecklistModule] clearLocalCache_ error:', e);
         }

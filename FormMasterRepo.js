@@ -9,7 +9,10 @@
 var FormMasterRepo = (function() {
   var CACHE_KEY = 'FORM_MASTER_CACHE_V2';
   var CACHE_TTL = 21600; // 6 ชั่วโมง (สูงสุดที่ Google Apps Script อนุญาต)
-  var SHEET_NAME = 'FORM_MASTER';
+
+  function getSheetName_() {
+    return (Config && Config.getFormMasterSheetName) ? Config.getFormMasterSheetName() : 'FORM_MASTER';
+  }
 
   /**
    * อ่านข้อมูล FORM_MASTER ผ่าน Cache (Lazy Refresh เมื่อ Cache Miss)
@@ -59,9 +62,10 @@ var FormMasterRepo = (function() {
   function readFormMasterFromSheet_() {
     var ssId = Config.getSpreadsheetId();
     var ss = SpreadsheetApp.openById(ssId);
-    var sheet = ss.getSheetByName(SHEET_NAME);
+    var sheetName = getSheetName_();
+    var sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
-      throw new Error('ไม่พบชีต ' + SHEET_NAME + ' ใน Spreadsheet ID: ' + ssId);
+      throw new Error('ไม่พบชีต ' + sheetName + ' ใน Spreadsheet ID: ' + ssId);
     }
 
     var values = sheet.getDataRange().getDisplayValues();

@@ -16,7 +16,9 @@ var Config = (function() {
     SCREEN_TAG: 'SA03',
     PROJECT_DATASET_KEY: 'site',
     ENABLE_SHEET_FALLBACK: 'false',
-    APPROVAL_STEPS: '2'
+    APPROVAL_STEPS: '2',
+    TRANSACTION_SHEET_NAME: 'FMSA03_TRANSACTION',
+    FORM_MASTER_SHEET_NAME: 'FORM_MASTER'
   };
 
   // ตัวแปรแคชในหน่วยความจำ อ่าน Properties ครั้งเดียวต่อ 1 Execution Context
@@ -69,6 +71,15 @@ var Config = (function() {
     },
     getScreenTag: function() {
       return getProp_('SCREEN_TAG');
+    },
+    getTransactionSheetName: function() {
+      var explicit = getProp_('TRANSACTION_SHEET_NAME');
+      if (explicit) return explicit;
+      var tag = getProp_('SCREEN_TAG') || 'SA03';
+      return 'FM' + tag + '_TRANSACTION';
+    },
+    getFormMasterSheetName: function() {
+      return getProp_('FORM_MASTER_SHEET_NAME') || 'FORM_MASTER';
     },
     getProjectDatasetKey: function() {
       return getProp_('PROJECT_DATASET_KEY');
