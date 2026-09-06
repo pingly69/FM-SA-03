@@ -27,13 +27,15 @@ var ApprovalService = (function() {
       var asL1 = TransactionRepo.findPendingL1Queue(approverName, monthFilter);
       var asL2 = TransactionRepo.findPendingL2Queue(approverName);
       var l2Approvers = CentralApiService.getApproveList(Config.getApproveTagL2());
+      var questions = FormMasterRepo.getFormMasterCached();
 
       return {
         user: user,
         approverName: approverName,
         asL1: asL1,
         asL2: asL2,
-        l2Approvers: l2Approvers
+        l2Approvers: l2Approvers,
+        questions: questions
       };
     },
 

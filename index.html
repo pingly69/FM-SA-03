@@ -1495,6 +1495,7 @@
               self.asL1 = res.data.asL1 || [];
               self.asL2 = res.data.asL2 || [];
               self.l2Approvers = res.data.l2Approvers || [];
+              self.questions = res.data.questions || [];
 
               self.updateBadges_();
               self.renderCards_();
@@ -1739,6 +1740,7 @@
       },
 
       viewDetails: function(recordId) {
+        var self = this;
         var list = this.activeSubtab === 'L1' ? this.asL1 : this.asL2;
         var target = null;
         for (var i = 0; i < list.length; i++) {
@@ -1767,10 +1769,18 @@
           if (keys.length === 0) {
             ansEl.innerHTML = '<div style="color:#64748B; padding:10px;">ไม่มีข้อมูลคำตอบ</div>';
           } else {
+            var qMap = {};
+            (self.questions || []).forEach(function(q) {
+              if (q && q.record_id !== undefined) {
+                qMap[String(q.record_id).trim()] = q.item_name || '';
+              }
+            });
+
             var html = '<table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">' +
               '<tr style="background:#F1F5F9; text-align:left; border-bottom: 2px solid #CBD5E1;">' +
-                '<th style="padding: 8px 10px; width: 60px;">ข้อที่</th>' +
-                '<th style="padding: 8px 10px;">ผลการตรวจสอบ</th>' +
+                '<th style="padding: 8px 10px; width: 55px;">ข้อ</th>' +
+                '<th style="padding: 8px 10px;">หัวข้อการตรวจสอบ</th>' +
+                '<th style="padding: 8px 10px; width: 85px; text-align: center;">ผลตรวจ</th>' +
               '</tr>';
 
             keys.sort(function(a, b) {
@@ -1783,16 +1793,21 @@
               var badgeHtml = '';
 
               if (ans === 'Y') {
-                badgeHtml = '<span style="background:#DCFCE7; color:#15803D; font-weight:700; padding:2px 8px; border-radius:4px;">✅ ผ่าน</span>';
+                badgeHtml = '<span style="background:#DCFCE7; color:#15803D; font-weight:700; padding:2px 8px; border-radius:4px; font-size:0.80rem; white-space:nowrap;">✅ ผ่าน</span>';
               } else if (ans === 'N') {
-                badgeHtml = '<span style="background:#FEE2E2; color:#B91C1C; font-weight:700; padding:2px 8px; border-radius:4px;">❌ ไม่ผ่าน</span>';
+                badgeHtml = '<span style="background:#FEE2E2; color:#B91C1C; font-weight:700; padding:2px 8px; border-radius:4px; font-size:0.80rem; white-space:nowrap;">❌ ไม่ผ่าน</span>';
               } else {
-                badgeHtml = '<span style="background:#E2E8F0; color:#475569; font-weight:600; padding:2px 8px; border-radius:4px;">➖ ไม่ตรวจ</span>';
+                badgeHtml = '<span style="background:#E2E8F0; color:#475569; font-weight:600; padding:2px 8px; border-radius:4px; font-size:0.80rem; white-space:nowrap;">➖ ไม่ตรวจ</span>';
               }
 
+              var qTitle = qMap[qId] || '';
+              var escapedId = String(qId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              qTitle = qTitle.replace(new RegExp('^' + escapedId + '[.\\s]+'), '');
+
               html += '<tr style="border-bottom: 1px solid #E2E8F0;">' +
-                '<td style="padding: 8px 10px; font-weight: 600; color: #2563EB;">ข้อ ' + qId + '</td>' +
-                '<td style="padding: 8px 10px;">' + badgeHtml + '</td>' +
+                '<td style="padding: 8px 10px; font-weight: 700; color: #2563EB; vertical-align: top; white-space: nowrap;">ข้อ ' + qId + '</td>' +
+                '<td style="padding: 8px 10px; color: #1E293B; vertical-align: top; line-height: 1.4;">' + (qTitle || '-') + '</td>' +
+                '<td style="padding: 8px 10px; text-align: center; vertical-align: top;">' + badgeHtml + '</td>' +
               '</tr>';
             }
 
