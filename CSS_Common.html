@@ -286,16 +286,69 @@
   .section-header {
     background: linear-gradient(135deg, #1E293B 0%, #334155 100%);
     color: #FFFFFF;
-    padding: 12px 16px;
+    padding: 10px 14px;
     border-radius: var(--radius-sm);
     font-size: 0.95rem;
     font-weight: 600;
-    margin-top: 18px;
+    margin-top: 20px;
     margin-bottom: 10px;
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
     gap: 8px;
     box-shadow: var(--shadow-sm);
+  }
+
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 200px;
+    min-width: 0;
+    word-break: break-word;
+    line-height: 1.4;
+  }
+
+  .btn-section-na {
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.12);
+    color: #E2E8F0;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    user-select: none;
+    touch-action: manipulation;
+  }
+
+  .btn-section-na:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.22);
+    color: #FFFFFF;
+    border-color: rgba(255, 255, 255, 0.45);
+  }
+
+  .btn-section-na:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+
+  .btn-section-na.active-na {
+    background: #64748B;
+    color: #FFFFFF;
+    border-color: #94A3B8;
+    box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.35);
+    font-weight: 600;
+  }
+
+  .btn-section-na:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .question-card {

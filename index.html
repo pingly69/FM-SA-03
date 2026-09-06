@@ -296,16 +296,69 @@
     .section-header {
       background: linear-gradient(135deg, #1E293B 0%, #334155 100%);
       color: #FFFFFF;
-      padding: 12px 16px;
+      padding: 10px 14px;
       border-radius: var(--radius-sm);
       font-size: 0.95rem;
       font-weight: 600;
-      margin-top: 18px;
+      margin-top: 20px;
       margin-bottom: 10px;
       display: flex;
       align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
       gap: 8px;
       box-shadow: var(--shadow-sm);
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1 1 200px;
+      min-width: 0;
+      word-break: break-word;
+      line-height: 1.4;
+    }
+
+    .btn-section-na {
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.12);
+      color: #E2E8F0;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      padding: 5px 12px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    .btn-section-na:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.22);
+      color: #FFFFFF;
+      border-color: rgba(255, 255, 255, 0.45);
+    }
+
+    .btn-section-na:active:not(:disabled) {
+      transform: scale(0.96);
+    }
+
+    .btn-section-na.active-na {
+      background: #64748B;
+      color: #FFFFFF;
+      border-color: #94A3B8;
+      box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.35);
+      font-weight: 600;
+    }
+
+    .btn-section-na:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
     .question-card {
@@ -1419,22 +1472,74 @@
         var container = document.getElementById('questionsContainer');
         if (!container) return;
 
-        var html = '';
+        this.sections = [];
+        this.questionToSectionIndex = {};
+
+        var currentSection = null;
         var qCount = 0;
 
+        // First pass: จัดกลุ่มข้อย่อยเข้าสู่ Section ต่าง ๆ
         for (var i = 0; i < questions.length; i++) {
           var item = questions[i];
           if (item.header_flag === 'Y') {
-            html += '<div class="section-header">📑 ' + item.item_name + '</div>';
+            currentSection = {
+              index: this.sections.length,
+              title: item.item_name,
+              childIds: []
+            };
+            this.sections.push(currentSection);
           } else {
             qCount++;
+            var strId = String(item.record_id).trim();
+            if (currentSection) {
+              currentSection.childIds.push(strId);
+              this.questionToSectionIndex[strId] = currentSection.index;
+            }
+          }
+        }
+
+        var html = '';
+        var disabledAttr = isEditable ? '' : 'disabled';
+        var secCounter = 0;
+
+        // Second pass: เรนเดอร์ HTML
+        for (var i = 0; i < questions.length; i++) {
+          var item = questions[i];
+          if (item.header_flag === 'Y') {
+            var sec = this.sections[secCounter++];
+            var hasChildren = sec && sec.childIds && sec.childIds.length > 0;
+
+            // ตรวจสอบว่าข้อย่อยทั้งหมดในหมวดนี้ถูกเลือกเป็น '-' อยู่แล้วหรือไม่
+            var allNA = false;
+            if (hasChildren) {
+              allNA = true;
+              for (var c = 0; c < sec.childIds.length; c++) {
+                if (this.answers[sec.childIds[c]] !== '-') {
+                  allNA = false;
+                  break;
+                }
+              }
+            }
+            var activeClass = allNA ? 'active-na' : '';
+            var btnHtml = '';
+            if (hasChildren) {
+              btnHtml = '<button type="button" id="btn_sec_' + sec.index + '" class="btn-section-na ' + activeClass + '" ' + disabledAttr +
+                ' onclick="ChecklistModule.toggleSectionNA(' + sec.index + ')" title="คลิกเพื่อเลือกหรือยกเลิก ไม่ตรวจ ให้ทุกข้อในหมวดนี้">' +
+                '➖ ไม่ตรวจทั้งหมวด</button>';
+            }
+
+            html += 
+              '<div class="section-header">' +
+                '<div class="section-title">📑 ' + item.item_name + '</div>' +
+                btnHtml +
+              '</div>';
+          } else {
             var strId = String(item.record_id).trim();
             var val = this.answers[strId] || '';
             var activeY = val === 'Y' ? 'active-y' : '';
             var activeN = val === 'N' ? 'active-n' : '';
             var activeNA = val === '-' ? 'active-na' : '';
             var answeredClass = val ? 'answered' : '';
-            var disabledAttr = isEditable ? '' : 'disabled';
 
             // ป้องกันเลขข้อซ้ำซ้อนถ้า item_name มีเลขข้อขึ้นต้นอยู่แล้ว
             var cleanText = String(item.item_name || '').trim();
@@ -1463,6 +1568,83 @@
         container.innerHTML = html;
       },
 
+      toggleSectionNA: function(secIndex) {
+        if (!this.sections || !this.sections[secIndex]) return;
+        var sec = this.sections[secIndex];
+        var childIds = sec.childIds || [];
+        if (childIds.length === 0) return;
+
+        // ตรวจสอบว่าข้อย่อยทั้งหมดในหมวดเป็น '-' อยู่แล้วหรือไม่
+        var allCurrentlyNA = true;
+        for (var i = 0; i < childIds.length; i++) {
+          if (this.answers[childIds[i]] !== '-') {
+            allCurrentlyNA = false;
+            break;
+          }
+        }
+
+        // Toggle: ถ้าเป็น '-' ทั้งหมดอยู่แล้ว ให้ล้างค่าเป็น '' (ยังไม่ตอบ) / ถ้ายังไม่ครบ ให้เซ็ตเป็น '-' ทั้งหมด
+        var targetVal = allCurrentlyNA ? '' : '-';
+
+        for (var i = 0; i < childIds.length; i++) {
+          var cid = childIds[i];
+          this.answers[cid] = targetVal;
+
+          // ปรับปรุง UI Question Card
+          var card = document.getElementById('q_card_' + cid);
+          if (card) {
+            if (targetVal) {
+              card.classList.add('answered');
+            } else {
+              card.classList.remove('answered');
+            }
+            var btns = card.querySelectorAll('.segmented-btn');
+            if (btns && btns.length === 3) {
+              btns[0].className = 'segmented-btn ' + (targetVal === '-' ? 'active-na' : '');
+              btns[1].className = 'segmented-btn ' + (targetVal === 'N' ? 'active-n' : '');
+              btns[2].className = 'segmented-btn ' + (targetVal === 'Y' ? 'active-y' : '');
+            }
+          }
+        }
+
+        // ปรับปรุง UI ปุ่ม Header
+        var secBtn = document.getElementById('btn_sec_' + secIndex);
+        if (secBtn) {
+          if (targetVal === '-') {
+            secBtn.classList.add('active-na');
+          } else {
+            secBtn.classList.remove('active-na');
+          }
+        }
+
+        this.updateProgress_();
+      },
+
+      updateSectionHeaderStateForQuestion_: function(recordId) {
+        if (!this.questionToSectionIndex || !this.sections) return;
+        var secIndex = this.questionToSectionIndex[recordId];
+        if (secIndex === undefined || secIndex === null) return;
+        var sec = this.sections[secIndex];
+        if (!sec || !sec.childIds || sec.childIds.length === 0) return;
+
+        var allNA = true;
+        for (var i = 0; i < sec.childIds.length; i++) {
+          if (this.answers[sec.childIds[i]] !== '-') {
+            allNA = false;
+            break;
+          }
+        }
+
+        var secBtn = document.getElementById('btn_sec_' + secIndex);
+        if (secBtn) {
+          if (allNA) {
+            secBtn.classList.add('active-na');
+          } else {
+            secBtn.classList.remove('active-na');
+          }
+        }
+      },
+
       setAnswer: function(recordId, value) {
         var strId = String(recordId).trim();
         this.answers[strId] = value;
@@ -1470,7 +1652,11 @@
         // Update UI card
         var card = document.getElementById('q_card_' + strId);
         if (card) {
-          card.classList.add('answered');
+          if (value) {
+            card.classList.add('answered');
+          } else {
+            card.classList.remove('answered');
+          }
           var btns = card.querySelectorAll('.segmented-btn');
           if (btns && btns.length === 3) {
             // btns[0] = ➖ ไม่ตรวจ, btns[1] = ❌ ไม่ผ่าน, btns[2] = ✅ ผ่าน
@@ -1479,6 +1665,9 @@
             btns[2].className = 'segmented-btn ' + (value === 'Y' ? 'active-y' : '');
           }
         }
+
+        // Auto-sync Section Header state
+        this.updateSectionHeaderStateForQuestion_(strId);
 
         this.updateProgress_();
       },
