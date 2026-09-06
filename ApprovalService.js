@@ -71,76 +71,99 @@ var ApprovalService = (function() {
       }
 
       var now = DateUtils.nowBangkok();
-      var updatedCount = 0;
 
-      for (var i = 0; i < transRecordIds.length; i++) {
-        var txId = transRecordIds[i];
-        var tx = TransactionRepo.findById(txId);
-        if (!tx) {
-          throw new Error('ไม่พบรายการรหัส ' + txId);
-        }
+      // 1. ดึงข้อมูลทุกรายการที่เลือกในรอบเดียว (Single Read Batch - ตัด N+1 Sheet Query)
+      var txList = TransactionRepo.findByIds(transRecordIds);
+      if (txList.length === 0) {
+        throw new Error('ไม่พบข้อมูลรายการที่เลือก');
+      }
 
+      // 2. Validate รายการทั้งหมดใน RAM ก่อนดำเนินการ
+      var updatesList = [];
+      var validTxList = [];
+
+      for (var i = 0; i < txList.length; i++) {
+        var tx = txList[i];
         if (lvl === 1) {
-          // V-7: ตรวจสอบสิทธิ์ผู้มีอำนาจอนุมัติ L1
           if (tx.approveProfile1 !== approverName) {
-            throw new Error('คุณไม่มีสิทธิ์อนุมัติรายการรหัส ' + txId + ' (ชื่อผู้อนุมัติ L1 ไม่ตรงกัน)');
+            throw new Error('คุณไม่มีสิทธิ์อนุมัติรายการรหัส ' + tx.transRecordId + ' (ชื่อผู้อนุมัติ L1 ไม่ตรงกัน)');
           }
           if (tx.status !== 'PENDING_L1') {
-            throw new Error('รายการรหัส ' + txId + ' ไม่อยู่ในสถานะรออนุมัติระดับ 1');
+            throw new Error('รายการรหัส ' + tx.transRecordId + ' ไม่อยู่ในสถานะรออนุมัติระดับ 1');
           }
-
-          TransactionRepo.update(txId, {
-            status: 'PENDING_L2',
-            approve1Result: 'APPROVED',
-            approve1Datetime: now,
-            approveProfile2: approveProfile2,
-            updateDatetime: now
+          updatesList.push({
+            transRecordId: tx.transRecordId,
+            updates: {
+              status: 'PENDING_L2',
+              approve1Result: 'APPROVED',
+              approve1Datetime: now,
+              approveProfile2: approveProfile2,
+              updateDatetime: now
+            }
           });
-          updatedCount++;
-
-          // แจ้งเตือนไปยัง L2
-          try {
-            var l2List = CentralApiService.getApproveList(Config.getApproveTagL2());
-            var l2User = null;
-            for (var k = 0; k < l2List.length; k++) {
-              if (l2List[k].users_name === approveProfile2) {
-                l2User = l2List[k];
-                break;
-              }
-            }
-            if (l2User && l2User.line_uid) {
-              NotifyService.notifyL2Pending(l2User.line_uid, approverName, tx.project, tx.transDate, 1);
-            }
-          } catch (errNotify) {
-            Logger.log('[ApprovalService] Notify L2 failed: ' + errNotify);
-          }
-
+          validTxList.push(tx);
         } else if (lvl === 2) {
-          // V-7: ตรวจสอบสิทธิ์ผู้มีอำนาจอนุมัติ L2
           if (tx.approveProfile2 !== approverName) {
-            throw new Error('คุณไม่มีสิทธิ์อนุมัติรายการรหัส ' + txId + ' (ชื่อผู้อนุมัติ L2 ไม่ตรงกัน)');
+            throw new Error('คุณไม่มีสิทธิ์อนุมัติรายการรหัส ' + tx.transRecordId + ' (ชื่อผู้อนุมัติ L2 ไม่ตรงกัน)');
           }
           if (tx.status !== 'PENDING_L2') {
-            throw new Error('รายการรหัส ' + txId + ' ไม่อยู่ในสถานะรออนุมัติระดับ 2');
+            throw new Error('รายการรหัส ' + tx.transRecordId + ' ไม่อยู่ในสถานะรออนุมัติระดับ 2');
           }
-
-          TransactionRepo.update(txId, {
-            status: 'APPROVED',
-            approve2Result: 'APPROVED',
-            approve2Datetime: now,
-            updateDatetime: now
-          });
-          updatedCount++;
-
-          // แจ้งเตือนไปยัง Requester ว่าผ่านสมบูรณ์แล้ว
-          try {
-            if (tx.lineUid) {
-              NotifyService.notifyRequesterApproved(tx.lineUid, approverName, tx.project, tx.transDate);
+          updatesList.push({
+            transRecordId: tx.transRecordId,
+            updates: {
+              status: 'APPROVED',
+              approve2Result: 'APPROVED',
+              approve2Datetime: now,
+              updateDatetime: now
             }
-          } catch (errNotify) {
-            Logger.log('[ApprovalService] Notify Requester failed: ' + errNotify);
+          });
+          validTxList.push(tx);
+        }
+      }
+
+      // 3. บันทึกการอัปเดตลง Google Sheets ในรอบเดียว (Single Write Batch with Lock)
+      // รับประกัน Database-First: บันทึกลง Sheet ให้เสร็จสมบูรณ์ก่อนเริ่มส่ง LINE
+      var updatedRows = TransactionRepo.batchUpdate(updatesList);
+      var updatedCount = updatedRows.length;
+
+      // 4. ส่งการแจ้งเตือน LINE แบบรวมยอด (Batch Notification) 1 ข้อความต่อ 1 ผู้รับ
+      // ทำงานใน try...catch เพื่อไม่ให้ข้อผิดพลาดของ LINE กระทบต่อผลการอนุมัติใน Google Sheets
+      try {
+        if (lvl === 1) {
+          // ค้นหา line_uid ของผู้อนุมัติ L2 จาก Central API
+          var l2List = CentralApiService.getApproveList(Config.getApproveTagL2());
+          var l2User = null;
+          for (var k = 0; k < l2List.length; k++) {
+            if (l2List[k].users_name === approveProfile2) {
+              l2User = l2List[k];
+              break;
+            }
+          }
+          if (l2User && l2User.line_uid) {
+            var summaryL2 = NotifyService.buildBatchSummary(validTxList);
+            NotifyService.notifyL2PendingBatch(l2User.line_uid, approverName, summaryL2);
+          }
+        } else if (lvl === 2) {
+          // จัดกลุ่มรายการตาม lineUid ของผู้ตรวจ (Requester) แล้วส่งสรุปรวม 1 ข้อความต่อ 1 ผู้ตรวจ
+          var txByRequester = {};
+          for (var r = 0; r < validTxList.length; r++) {
+            var reqUid = validTxList[r].lineUid;
+            if (reqUid) {
+              if (!txByRequester[reqUid]) txByRequester[reqUid] = [];
+              txByRequester[reqUid].push(validTxList[r]);
+            }
+          }
+          for (var uidKey in txByRequester) {
+            if (txByRequester.hasOwnProperty(uidKey)) {
+              var reqItems = txByRequester[uidKey];
+              var summaryReq = NotifyService.buildBatchSummary(reqItems);
+              NotifyService.notifyRequesterApprovedBatch(uidKey, approverName, summaryReq);
+            }
           }
         }
+      } catch (errNotify) {
+        Logger.log('[ApprovalService] Batch notify failed: ' + errNotify);
       }
 
       return {
@@ -151,6 +174,7 @@ var ApprovalService = (function() {
 
     /**
      * ดำเนินการปฏิเสธ (Reject Action - ตีกลับให้ผู้ตรวจแก้ไข)
+     * รองรับ Batch Reject ในรอบเดียว พร้อมแจ้งเตือนสรุปใน 1 ข้อความ
      * @param {string} lineUid LINE UID ของผู้ปฏิเสธ
      * @param {number} level 1 หรือ 2
      * @param {Array<number>} transRecordIds รายการ ID
@@ -167,46 +191,74 @@ var ApprovalService = (function() {
       var lvl = Number(level);
       var now = DateUtils.nowBangkok();
       var cleanReason = String(reason || '').trim();
-      var updatedCount = 0;
 
-      for (var i = 0; i < transRecordIds.length; i++) {
-        var txId = transRecordIds[i];
-        var tx = TransactionRepo.findById(txId);
-        if (!tx) {
-          throw new Error('ไม่พบรายการรหัส ' + txId);
-        }
+      // 1. ดึงข้อมูลทุกรายการที่เลือกในรอบเดียว (Single Read Batch)
+      var txList = TransactionRepo.findByIds(transRecordIds);
+      if (txList.length === 0) {
+        throw new Error('ไม่พบข้อมูลรายการที่เลือก');
+      }
 
-        var updates = {
-          status: 'REJECTED',
-          rejectReason: cleanReason,
-          updateDatetime: now
-        };
+      var updatesList = [];
+      var validTxList = [];
 
+      for (var i = 0; i < txList.length; i++) {
+        var tx = txList[i];
         if (lvl === 1) {
           if (tx.approveProfile1 !== approverName) {
-            throw new Error('คุณไม่มีสิทธิ์ปฏิเสธรายการรหัส ' + txId);
+            throw new Error('คุณไม่มีสิทธิ์ปฏิเสธรายการรหัส ' + tx.transRecordId);
           }
-          updates.approve1Result = 'REJECTED';
-          updates.approve1Datetime = now;
+          updatesList.push({
+            transRecordId: tx.transRecordId,
+            updates: {
+              status: 'REJECTED',
+              approve1Result: 'REJECTED',
+              approve1Datetime: now,
+              rejectReason: cleanReason,
+              updateDatetime: now
+            }
+          });
+          validTxList.push(tx);
         } else if (lvl === 2) {
           if (tx.approveProfile2 !== approverName) {
-            throw new Error('คุณไม่มีสิทธิ์ปฏิเสธรายการรหัส ' + txId);
+            throw new Error('คุณไม่มีสิทธิ์ปฏิเสธรายการรหัส ' + tx.transRecordId);
           }
-          updates.approve2Result = 'REJECTED';
-          updates.approve2Datetime = now;
+          updatesList.push({
+            transRecordId: tx.transRecordId,
+            updates: {
+              status: 'REJECTED',
+              approve2Result: 'REJECTED',
+              approve2Datetime: now,
+              rejectReason: cleanReason,
+              updateDatetime: now
+            }
+          });
+          validTxList.push(tx);
         }
+      }
 
-        TransactionRepo.update(txId, updates);
-        updatedCount++;
+      // 2. บันทึกการอัปเดตลง Google Sheets ในรอบเดียว (Single Write Batch)
+      var updatedRows = TransactionRepo.batchUpdate(updatesList);
+      var updatedCount = updatedRows.length;
 
-        // แจ้งเตือนเจ้าของรายการ (Requester)
-        try {
-          if (tx.lineUid) {
-            NotifyService.notifyRequesterRejected(tx.lineUid, approverName, lvl, cleanReason, tx.project, tx.transDate);
+      // 3. ส่งการแจ้งเตือน LINE แบบรวมยอด (Batch Notification)
+      try {
+        var txByRequester = {};
+        for (var r = 0; r < validTxList.length; r++) {
+          var reqUid = validTxList[r].lineUid;
+          if (reqUid) {
+            if (!txByRequester[reqUid]) txByRequester[reqUid] = [];
+            txByRequester[reqUid].push(validTxList[r]);
           }
-        } catch (errNotify) {
-          Logger.log('[ApprovalService] Notify Requester rejected failed: ' + errNotify);
         }
+        for (var uidKey in txByRequester) {
+          if (txByRequester.hasOwnProperty(uidKey)) {
+            var reqItems = txByRequester[uidKey];
+            var summaryReq = NotifyService.buildBatchSummary(reqItems);
+            NotifyService.notifyRequesterRejectedBatch(uidKey, approverName, lvl, cleanReason, summaryReq);
+          }
+        }
+      } catch (errNotify) {
+        Logger.log('[ApprovalService] Batch reject notify failed: ' + errNotify);
       }
 
       return {

@@ -131,6 +131,30 @@ var TransactionRepo = (function() {
     },
 
     /**
+     * ค้นหารายการหลาย ID พร้อมกันในรอบเดียว (Single Read Batch)
+     */
+    findByIds: function(transRecordIds) {
+      if (!Array.isArray(transRecordIds) || transRecordIds.length === 0) return [];
+      var idSet = {};
+      for (var k = 0; k < transRecordIds.length; k++) {
+        idSet[Number(transRecordIds[k])] = true;
+      }
+
+      var sheet = getSheet_();
+      var data = sheet.getDataRange().getValues();
+      if (data.length <= 1) return [];
+
+      var results = [];
+      for (var i = 1; i < data.length; i++) {
+        var rId = Number(data[i][0]);
+        if (idSet[rId]) {
+          results.push(rowToObject_(data[i], i + 1));
+        }
+      }
+      return results;
+    },
+
+    /**
      * บันทึกรายการใหม่ลงชีต (Insert)
      */
     insert: function(record) {
@@ -211,6 +235,72 @@ var TransactionRepo = (function() {
         range.setValues([row]);
 
         return rowToObject_(row, targetRowIndex);
+      } finally {
+        lock.releaseLock();
+      }
+    },
+
+    /**
+     * อัปเดตข้อมูลรายการหลายรายการพร้อมกันในรอบเดียว (Single Write Batch with Lock)
+     * รองรับ 30-40 รายการภายใน < 0.5 วินาที แทนการวนลูปทีละแถว
+     * @param {Array<{ transRecordId: number, updates: Object }>} updatesList
+     */
+    batchUpdate: function(updatesList) {
+      if (!Array.isArray(updatesList) || updatesList.length === 0) return [];
+
+      var lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(15000); // รอ lock สูงสุด 15 วินาที
+        var sheet = getSheet_();
+        var data = sheet.getDataRange().getValues();
+        if (data.length <= 1) return [];
+
+        var idToRowIndex = {};
+        for (var i = 1; i < data.length; i++) {
+          var rId = Number(data[i][0]);
+          if (rId) {
+            idToRowIndex[rId] = i;
+          }
+        }
+
+        var updatedRows = [];
+        var now = DateUtils.nowBangkok();
+
+        for (var u = 0; u < updatesList.length; u++) {
+          var item = updatesList[u];
+          var targetId = Number(item.transRecordId);
+          var rowIndex = idToRowIndex[targetId];
+
+          if (rowIndex === undefined) {
+            Logger.log('[TransactionRepo.batchUpdate] Not found ID: ' + targetId);
+            continue;
+          }
+
+          var row = data[rowIndex];
+          var updates = item.updates || {};
+
+          if (updates.project !== undefined) row[2] = updates.project;
+          if (updates.approveProfile1 !== undefined) row[6] = updates.approveProfile1;
+          if (updates.approveProfile2 !== undefined) row[7] = updates.approveProfile2;
+          if (updates.status !== undefined) row[8] = updates.status;
+          if (updates.approve1Datetime !== undefined) row[9] = updates.approve1Datetime;
+          if (updates.approve1Result !== undefined) row[10] = updates.approve1Result;
+          if (updates.approve2Datetime !== undefined) row[11] = updates.approve2Datetime;
+          if (updates.approve2Result !== undefined) row[12] = updates.approve2Result;
+          if (updates.rejectReason !== undefined) row[13] = updates.rejectReason;
+          if (updates.resubmitCount !== undefined) row[14] = updates.resubmitCount;
+          if (updates.answers !== undefined) {
+            row[15] = typeof updates.answers === 'object' ? JSON.stringify(updates.answers) : String(updates.answers);
+          }
+
+          row[5] = updates.updateDatetime || now; // UPDATE_DATETIME
+          updatedRows.push(rowToObject_(row, rowIndex + 1));
+        }
+
+        // เขียนข้อมูลทั้งตารางกลับลง Sheet ในรอบเดียว (Single Write Batch)
+        sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+
+        return updatedRows;
       } finally {
         lock.releaseLock();
       }

@@ -98,6 +98,97 @@ var NotifyService = (function() {
         type: 'text',
         text: text
       });
+    },
+
+    /**
+     * รวบรวมสรุปข้อมูลรายการสำหรับส่งข้อความแจ้งเตือนรวมยอด (Batch Summary)
+     */
+    buildBatchSummary: function(items) {
+      if (!items || items.length === 0) {
+        return { totalCount: 0, dateRangeStr: '-', projectsStr: '-' };
+      }
+      var projectSet = {};
+      var dates = [];
+      for (var i = 0; i < items.length; i++) {
+        var p = String(items[i].project || '').trim();
+        if (p) projectSet[p] = true;
+        if (items[i].transDate) dates.push(items[i].transDate);
+      }
+      var projects = Object.keys(projectSet);
+      var projectsStr = projects.join(', ');
+      if (projects.length > 2) {
+        projectsStr = projects.slice(0, 2).join(', ') + ' และอื่นๆ (รวม ' + projects.length + ' โครงการ)';
+      }
+
+      dates.sort();
+      var dateRangeStr = '';
+      if (dates.length === 1 || dates[0] === dates[dates.length - 1]) {
+        dateRangeStr = dates[0] || '-';
+      } else {
+        dateRangeStr = dates[0] + ' ถึง ' + dates[dates.length - 1];
+      }
+
+      return {
+        totalCount: items.length,
+        dateRangeStr: dateRangeStr,
+        projectsStr: projectsStr || 'ไม่ระบุ'
+      };
+    },
+
+    /**
+     * แจ้งเตือนผู้อนุมัติระดับ 2 แบบรวมยอดใน 1 ข้อความ (L1 Batch Approval)
+     */
+    notifyL2PendingBatch: function(l2LineUid, l1ApproverName, summary) {
+      var countText = summary.totalCount > 1 ? summary.totalCount + ' รายการ' : '1 รายการ';
+      var text = '🔔 แจ้งเตือน: มีรายการรออนุมัติระดับ 2 (FM-SA-03)\n' +
+        '• จำนวน: ' + countText + '\n' +
+        '• โครงการ: ' + (summary.projectsStr || 'ไม่ระบุ') + '\n' +
+        '• วันที่ตรวจ: ' + (summary.dateRangeStr || '-') + '\n' +
+        '• ผ่านการอนุมัติระดับ 1 โดย: ' + (l1ApproverName || '') + '\n' +
+        '• สถานะ: รอท่านพิจารณาอนุมัติระดับ 2\n\n' +
+        '👉 กรุณาเปิดระบบเพื่อตรวจสอบและพิจารณาอนุมัติ';
+
+      return sendPush_(l2LineUid, {
+        type: 'text',
+        text: text
+      });
+    },
+
+    /**
+     * แจ้งเตือนผู้ตรวจ (Requester) แบบรวมยอดเมื่อ L2 อนุมัติสมบูรณ์ (L2 Batch Approval)
+     */
+    notifyRequesterApprovedBatch: function(requesterLineUid, l2ApproverName, summary) {
+      var countText = summary.totalCount > 1 ? summary.totalCount + ' รายการ' : '1 รายการ';
+      var text = '✅ รายการตรวจความปลอดภัย (FM-SA-03) อนุมัติสมบูรณ์แล้ว\n' +
+        '• จำนวน: ' + countText + '\n' +
+        '• โครงการ: ' + (summary.projectsStr || 'ไม่ระบุ') + '\n' +
+        '• วันที่ตรวจ: ' + (summary.dateRangeStr || '-') + '\n' +
+        '• ผู้อนุมัติระดับ 2: ' + (l2ApproverName || '') + '\n' +
+        '• สถานะ: อนุมัติสมบูรณ์ (Approved) เรียบร้อยแล้วทุกรายการ';
+
+      return sendPush_(requesterLineUid, {
+        type: 'text',
+        text: text
+      });
+    },
+
+    /**
+     * แจ้งเตือนผู้ตรวจ (Requester) แบบรวมยอดเมื่อถูกปฏิเสธ/ตีกลับ (Batch Reject)
+     */
+    notifyRequesterRejectedBatch: function(requesterLineUid, rejectorName, level, reason, summary) {
+      var countText = summary.totalCount > 1 ? summary.totalCount + ' รายการ' : '1 รายการ';
+      var text = '⚠️ รายการตรวจความปลอดภัย (FM-SA-03) ถูกตีกลับให้แก้ไข\n' +
+        '• จำนวน: ' + countText + '\n' +
+        '• โครงการ: ' + (summary.projectsStr || 'ไม่ระบุ') + '\n' +
+        '• วันที่ตรวจ: ' + (summary.dateRangeStr || '-') + '\n' +
+        '• ผู้ปฏิเสธ: ' + (rejectorName || '') + ' (ระดับ ' + level + ')\n' +
+        '• เหตุผล: ' + (reason || 'ไม่ระบุเหตุผล') + '\n\n' +
+        '👉 กรุณาเปิดระบบเพื่อแก้ไขข้อมูลและส่งอนุมัติใหม่อีกครั้ง';
+
+      return sendPush_(requesterLineUid, {
+        type: 'text',
+        text: text
+      });
     }
   };
 })();
