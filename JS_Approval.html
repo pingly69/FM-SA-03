@@ -50,12 +50,11 @@ var ApprovalModule = {
     if (tab === 'L1') {
       if (btnL1) { btnL1.className = 'btn btn-primary'; }
       if (btnL2) { btnL2.className = 'btn btn-secondary'; }
-      if (mContainer) mContainer.style.display = 'flex';
     } else {
       if (btnL1) { btnL1.className = 'btn btn-secondary'; }
       if (btnL2) { btnL2.className = 'btn btn-primary'; }
-      if (mContainer) mContainer.style.display = 'none';
     }
+    if (mContainer) mContainer.style.display = 'flex';
 
     var selectAll = document.getElementById('selectAllCheckbox');
     if (selectAll) selectAll.checked = false;

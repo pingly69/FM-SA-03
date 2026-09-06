@@ -30,7 +30,7 @@ var ApprovalService = (function() {
       var l2Approvers = [];
 
       if (steps > 1) {
-        asL2 = TransactionRepo.findPendingL2Queue(approverName);
+        asL2 = TransactionRepo.findPendingL2Queue(approverName, monthFilter);
         l2Approvers = CentralApiService.getApproveList(Config.getApproveTagL2());
       }
       var questions = FormMasterRepo.getFormMasterCached();

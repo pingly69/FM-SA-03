@@ -341,8 +341,9 @@ var TransactionRepo = (function() {
     /**
      * ค้นหารายการคอยอนุมัติระดับ 2 (PENDING_L2) ที่ระบุ approve_profile2
      * @param {string} approverName ชื่อผู้อนุมัติ
+     * @param {string} [monthFilter] กรองเดือน เช่น "2026-09"
      */
-    findPendingL2Queue: function(approverName) {
+    findPendingL2Queue: function(approverName, monthFilter) {
       var sheet = getSheet_();
       var data = sheet.getDataRange().getValues();
       if (data.length <= 1) return [];
@@ -352,9 +353,12 @@ var TransactionRepo = (function() {
         var row = data[i];
         var status = String(row[8] || '').trim();
         var apv2 = String(row[7] || '').trim();
+        var tDate = normalizeDate_(row[1]);
 
         if (status === 'PENDING_L2' && apv2 === approverName) {
-          queue.push(rowToObject_(row, i + 1));
+          if (!monthFilter || tDate.indexOf(monthFilter) === 0) {
+            queue.push(rowToObject_(row, i + 1));
+          }
         }
       }
 
