@@ -64,16 +64,31 @@ var CentralApiService = (function() {
         };
       }
 
+      var targetScreen = screen || Config.getScreenTag();
+      var cache = CacheService.getScriptCache();
+      var cacheKey = 'AUTH_VERIFY_' + encodeURIComponent(lineUid) + '_' + encodeURIComponent(targetScreen);
+      var cached = cache.get(cacheKey);
+      if (cached) {
+        try {
+          return JSON.parse(cached);
+        } catch (e) {}
+      }
+
       var payload = {
         action: 'verifyAccess',
         datasetKey: 'users_profile',
         line_uid: lineUid,
-        screen: screen || Config.getScreenTag(),
+        screen: targetScreen,
         forceFresh: false
       };
 
       try {
         var res = postRequest_(payload);
+        if (res && res.ok) {
+          try {
+            cache.put(cacheKey, JSON.stringify(res), 600); // แคช 10 นาที
+          } catch (ce) {}
+        }
         return res;
       } catch (err) {
         Logger.log('[CentralApiService] verifyAccess failed: ' + err);

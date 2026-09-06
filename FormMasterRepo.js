@@ -7,7 +7,7 @@
  */
 
 var FormMasterRepo = (function() {
-  var CACHE_KEY = 'FORM_MASTER_CACHE_V1';
+  var CACHE_KEY = 'FORM_MASTER_CACHE_V2';
   var CACHE_TTL = 21600; // 6 ชั่วโมง (สูงสุดที่ Google Apps Script อนุญาต)
   var SHEET_NAME = 'FORM_MASTER';
 
@@ -53,6 +53,7 @@ var FormMasterRepo = (function() {
 
   /**
    * อ่านข้อมูลสดจาก Google Sheet โดยตรง
+   * ใช้ getDisplayValues() เพื่อรักษาฟอร์แมตเลขข้อ เช่น "1.10", "1.11" ให้ครบถ้วน ไม่ถูกตัดเป็น float
    * @private
    */
   function readFormMasterFromSheet_() {
@@ -63,7 +64,7 @@ var FormMasterRepo = (function() {
       throw new Error('ไม่พบชีต ' + SHEET_NAME + ' ใน Spreadsheet ID: ' + ssId);
     }
 
-    var values = sheet.getDataRange().getValues();
+    var values = sheet.getDataRange().getDisplayValues();
     if (values.length <= 1) {
       return [];
     }
@@ -84,19 +85,15 @@ var FormMasterRepo = (function() {
 
       if (recordId !== '' && recordId !== null && recordId !== undefined) {
         items.push({
-          record_id: Number(recordId),
-          item_name: String(itemName || ''),
+          record_id: String(recordId).trim(),
+          item_name: String(itemName || '').trim(),
           header_flag: headerFlag === 'Y' ? 'Y' : 'N',
           score: isNaN(score) ? 0 : score
         });
       }
     });
 
-    // เรียงตาม record_id
-    items.sort(function(a, b) {
-      return a.record_id - b.record_id;
-    });
-
+    // คงลำดับจากบนลงล่างตามที่ผู้ดูแลระบบจัดเรียงไว้ในชีต FORM_MASTER โดยตรง
     return items;
   }
 

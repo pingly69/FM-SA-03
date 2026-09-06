@@ -158,6 +158,51 @@ var ChecklistService = (function() {
         throw new Error('จำเป็นต้องระบุ transRecordId ในการส่งอนุมัติใหม่');
       }
       return this.saveChecklist(payload);
+    },
+
+    /**
+     * ดึงเฉพาะ Transaction ของผู้ใช้ในวันที่ระบุ (Lightweight สำหรับสลับวันที่)
+     * เพื่อไม่ต้องโหลดชุดคำถามและโครงการซ้ำ ทำให้เปลี่ยนวันที่ได้ในเสี้ยววินาที
+     */
+    getTransactionByDate: function(lineUid, transDate) {
+      var targetDate = transDate || DateUtils.todayBangkok();
+      var existingTx = null;
+      var isEditable = true;
+      var lockReason = '';
+
+      if (lineUid) {
+        existingTx = TransactionRepo.findByUserAndDate(lineUid, targetDate);
+        if (existingTx) {
+          if (existingTx.status === 'APPROVED') {
+            isEditable = false;
+            lockReason = 'รายการของวันนี้ได้รับการอนุมัติสมบูรณ์แล้ว (ล็อกการแก้ไข)';
+          } else if (existingTx.status === 'PENDING_L2') {
+            isEditable = false;
+            lockReason = 'รายการกำลังอยู่ระหว่างการพิจารณาอนุมัติระดับ 2 (ล็อกการแก้ไข)';
+          }
+        }
+      }
+
+      return {
+        transDate: targetDate,
+        transaction: existingTx,
+        isEditable: isEditable,
+        lockReason: lockReason
+      };
+    },
+
+    /**
+     * ลบรายการตรวจสอบ (กรณีระบุวันที่ผิด หรือต้องการยกเลิก)
+     * ต้องเป็นเจ้าของรายการ และสถานะต้องยังไม่อนุมัติ (PENDING_L1 หรือ REJECTED)
+     */
+    deleteChecklist: function(transRecordId, lineUid) {
+      if (!transRecordId) {
+        throw new Error('จำเป็นต้องระบุ transRecordId ในการลบ');
+      }
+      if (!lineUid) {
+        throw new Error('จำเป็นต้องระบุ lineUid');
+      }
+      return TransactionRepo.delete(transRecordId, lineUid);
     }
   };
 })();

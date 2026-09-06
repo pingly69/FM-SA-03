@@ -38,3 +38,25 @@ function apiResubmitChecklist(payload) {
     return ResponseUtils.fail('RESUBMIT_ERROR', e.message);
   }
 }
+
+function apiGetTransactionByDate(lineUid, transDate) {
+  try {
+    var data = ChecklistService.getTransactionByDate(lineUid, transDate);
+    return ResponseUtils.ok(data);
+  } catch (e) {
+    Logger.log('[ChecklistController] apiGetTransactionByDate error: ' + e);
+    return ResponseUtils.fail('GET_TX_ERROR', e.message);
+  }
+}
+
+function apiDeleteChecklist(payload) {
+  try {
+    var transRecordId = payload && payload.transRecordId ? payload.transRecordId : payload;
+    var lineUid = payload && payload.lineUid ? payload.lineUid : arguments[1];
+    var res = ChecklistService.deleteChecklist(transRecordId, lineUid);
+    return ResponseUtils.ok(res);
+  } catch (e) {
+    Logger.log('[ChecklistController] apiDeleteChecklist error: ' + e);
+    return ResponseUtils.fail('DELETE_ERROR', e.message);
+  }
+}

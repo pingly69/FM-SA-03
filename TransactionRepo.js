@@ -35,6 +35,22 @@ var TransactionRepo = (function() {
     return sheet;
   }
 
+  function normalizeDate_(val) {
+    if (!val) return '';
+    if (val instanceof Date) {
+      return DateUtils.formatBangkok(val, 'yyyy-MM-dd');
+    }
+    var str = String(val).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      return str;
+    }
+    var d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      return DateUtils.formatBangkok(d, 'yyyy-MM-dd');
+    }
+    return str;
+  }
+
   function rowToObject_(row, rowIndex) {
     if (!row || row.length === 0 || !row[0]) return null;
 
@@ -51,7 +67,7 @@ var TransactionRepo = (function() {
     return {
       rowIndex: rowIndex,
       transRecordId: Number(row[0]),
-      transDate: String(row[1] || '').trim(),
+      transDate: normalizeDate_(row[1]),
       project: String(row[2] || '').trim(),
       lineUid: String(row[3] || '').trim(),
       createDatetime: String(row[4] || ''),
@@ -80,13 +96,16 @@ var TransactionRepo = (function() {
       var data = sheet.getDataRange().getValues();
       if (data.length <= 1) return null;
 
+      var targetDateStr = String(transDate).trim();
+      var targetUidStr = String(lineUid).trim();
+
       // ค้นหาย้อนจากล่างขึ้นบนเพื่อให้ได้ข้อมูลล่าสุด
       for (var i = data.length - 1; i >= 1; i--) {
         var row = data[i];
-        var rowDate = String(row[1] || '').trim();
+        var rowDate = normalizeDate_(row[1]);
         var rowUid = String(row[3] || '').trim();
 
-        if (rowDate === transDate && rowUid === lineUid) {
+        if (rowDate === targetDateStr && rowUid === targetUidStr) {
           return rowToObject_(row, i + 1);
         }
       }
@@ -212,7 +231,7 @@ var TransactionRepo = (function() {
         var row = data[i];
         var status = String(row[8] || '').trim();
         var apv1 = String(row[6] || '').trim();
-        var tDate = String(row[1] || '').trim();
+        var tDate = normalizeDate_(row[1]);
 
         if (status === 'PENDING_L1' && apv1 === approverName) {
           if (!monthFilter || tDate.indexOf(monthFilter) === 0) {
@@ -254,6 +273,49 @@ var TransactionRepo = (function() {
       });
 
       return queue;
+    },
+
+    /**
+     * ลบรายการตาม TRANS_RECORD_ID (ต้องเป็นเจ้าของ lineUid)
+     */
+    delete: function(transRecordId, lineUid) {
+      var lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        var sheet = getSheet_();
+        var data = sheet.getDataRange().getValues();
+        var targetId = Number(transRecordId);
+
+        var targetRowIndex = -1;
+        var rowUid = '';
+        var rowStatus = '';
+
+        for (var i = 1; i < data.length; i++) {
+          if (Number(data[i][0]) === targetId) {
+            targetRowIndex = i + 1;
+            rowUid = String(data[i][3] || '').trim();
+            rowStatus = String(data[i][8] || '').trim();
+            break;
+          }
+        }
+
+        if (targetRowIndex === -1) {
+          throw new Error('ไม่พบข้อมูลรายการ ID: ' + transRecordId);
+        }
+
+        if (lineUid && rowUid !== String(lineUid).trim()) {
+          throw new Error('ไม่มีสิทธิ์ลบรายการนี้ (ไม่ใช่เจ้าของข้อมูล)');
+        }
+
+        if (rowStatus === 'APPROVED' || rowStatus === 'PENDING_L2') {
+          throw new Error('ไม่สามารถลบรายการที่ผ่านการอนุมัติหรืออยู่ระหว่างการอนุมัติระดับ 2 ได้');
+        }
+
+        sheet.deleteRow(targetRowIndex);
+        return { success: true, deletedId: targetId };
+      } finally {
+        lock.releaseLock();
+      }
     }
   };
 })();

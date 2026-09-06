@@ -49,8 +49,11 @@
 
 <!-- Sticky Bottom Bar for Checklist Entry -->
 <div id="checklistBottomBar" class="bottom-bar">
-  <div class="bottom-bar-inner">
-    <button id="btnSaveChecklist" class="btn btn-primary" onclick="ChecklistModule.submitChecklist()">
+  <div class="bottom-bar-inner" style="display: flex; gap: 10px;">
+    <button id="btnDeleteChecklist" type="button" class="btn" onclick="ChecklistModule.deleteCurrentChecklist()" style="display: none; background: #FEE2E2; color: #B91C1C; border: 1px solid #FCA5A5; font-weight: 600; flex: 0 0 auto; padding: 12px 14px; border-radius: var(--radius-md); font-size: 0.92rem; cursor: pointer;">
+      🗑️ ลบ
+    </button>
+    <button id="btnSaveChecklist" class="btn btn-primary" onclick="ChecklistModule.submitChecklist()" style="flex: 1;">
       💾 บันทึกผลการตรวจสอบ
     </button>
   </div>

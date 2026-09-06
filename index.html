@@ -690,8 +690,11 @@
 
   <!-- Sticky Bottom Bar for Checklist Entry -->
   <div id="checklistBottomBar" class="bottom-bar">
-    <div class="bottom-bar-inner">
-      <button id="btnSaveChecklist" class="btn btn-primary" onclick="ChecklistModule.submitChecklist()">
+    <div class="bottom-bar-inner" style="display: flex; gap: 10px;">
+      <button id="btnDeleteChecklist" type="button" class="btn" onclick="ChecklistModule.deleteCurrentChecklist()" style="display: none; background: #FEE2E2; color: #B91C1C; border: 1px solid #FCA5A5; font-weight: 600; flex: 0 0 auto; padding: 12px 14px; border-radius: var(--radius-md); font-size: 0.92rem; cursor: pointer;">
+        🗑️ ลบ
+      </button>
+      <button id="btnSaveChecklist" class="btn btn-primary" onclick="ChecklistModule.submitChecklist()" style="flex: 1;">
         💾 บันทึกผลการตรวจสอบ
       </button>
     </div>
@@ -907,12 +910,21 @@
 
         if (action === 'verifyUser') {
           body.lineUid = args[0];
-        } else if (action === 'getChecklistForm') {
+        } else if (action === 'getChecklistForm' || action === 'getTransactionByDate') {
           body.lineUid = args[0];
           body.transDate = args[1];
         } else if (action === 'getApprovalQueue') {
           body.lineUid = args[0];
           body.monthFilter = args[1];
+        } else if (action === 'deleteChecklist') {
+          var delPayload = args[0] || {};
+          if (typeof delPayload === 'object') {
+            body.transRecordId = delPayload.transRecordId;
+            body.lineUid = delPayload.lineUid;
+          } else {
+            body.transRecordId = args[0];
+            body.lineUid = args[1];
+          }
         } else if (action === 'saveChecklist' || action === 'resubmitChecklist' || action === 'approveAction' || action === 'rejectAction') {
           var payload = args[0] || {};
           for (var k in payload) {
@@ -988,9 +1000,87 @@
         return y + '-' + m + '-' + d;
       },
 
+      /**
+       * เมื่อเปลี่ยนวันที่:
+       * ใช้ Fast Track ดึงเฉพาะ Transaction ของวันนั้น โดยไม่ต้องโหลดชุดคำถามและโครงการใหม่
+       */
       onDateChange: function(newDate) {
         if (!newDate) return;
-        this.loadForm(newDate);
+        var self = this;
+        if (!self.currentData || !self.currentData.questions || self.currentData.questions.length === 0) {
+          self.loadForm(newDate);
+          return;
+        }
+
+        App.showLoading('กำลังตรวจสอบข้อมูลของวันที่ ' + newDate + '...');
+        App.callServer('apiGetTransactionByDate', App.currentUser.line_uid, newDate)
+          .then(function(res) {
+            App.hideLoading();
+            if (res && res.success && res.data) {
+              self.applyTransactionUpdate_(res.data);
+            } else {
+              self.loadForm(newDate);
+            }
+          })
+          .catch(function(err) {
+            App.hideLoading();
+            self.loadForm(newDate);
+          });
+      },
+
+      applyTransactionUpdate_: function(txData) {
+        var self = this;
+        var tx = txData.transaction;
+        var isEditable = txData.isEditable;
+
+        self.currentData.transaction = tx;
+        self.currentData.isEditable = isEditable;
+        self.currentData.lockReason = txData.lockReason;
+        self.currentData.transDate = txData.transDate;
+
+        self.renderStatusBanner_(tx, isEditable, txData.lockReason);
+
+        var pSelect = document.getElementById('projectSelect');
+        if (pSelect) {
+          pSelect.value = (tx && tx.project) ? tx.project : '';
+          pSelect.disabled = !isEditable;
+        }
+
+        var aSelect = document.getElementById('approver1Select');
+        if (aSelect) {
+          aSelect.value = (tx && tx.approveProfile1) ? tx.approveProfile1 : '';
+          aSelect.disabled = !isEditable;
+        }
+
+        self.answers = (tx && tx.answers) ? Object.assign({}, tx.answers) : {};
+
+        // อัปเดตสถานะของปุ่มในแบบสอบถามที่เรนเดอร์อยู่เดิม
+        var questions = self.currentData.questions || [];
+        for (var i = 0; i < questions.length; i++) {
+          var q = questions[i];
+          if (q.header_flag === 'N') {
+            var strId = String(q.record_id).trim();
+            var card = document.getElementById('q_card_' + strId);
+            if (card) {
+              var val = self.answers[strId] || '';
+              if (val) card.classList.add('answered');
+              else card.classList.remove('answered');
+
+              var btns = card.querySelectorAll('.segmented-btn');
+              if (btns && btns.length === 3) {
+                btns[0].className = 'segmented-btn ' + (val === '-' ? 'active-na' : '');
+                btns[1].className = 'segmented-btn ' + (val === 'N' ? 'active-n' : '');
+                btns[2].className = 'segmented-btn ' + (val === 'Y' ? 'active-y' : '');
+                btns[0].disabled = !isEditable;
+                btns[1].disabled = !isEditable;
+                btns[2].disabled = !isEditable;
+              }
+            }
+          }
+        }
+
+        self.updateActionButtons_(tx, isEditable);
+        self.updateProgress_();
       },
 
       loadForm: function(transDate) {
@@ -1022,8 +1112,10 @@
         var tx = data.transaction;
         var isEditable = data.isEditable;
 
+        // Render Status Badge & Banner
         self.renderStatusBanner_(tx, isEditable, data.lockReason);
 
+        // Populate Project Select
         var pSelect = document.getElementById('projectSelect');
         if (pSelect) {
           pSelect.innerHTML = '<option value="">-- กรุณาเลือกโครงการ --</option>';
@@ -1037,6 +1129,7 @@
           pSelect.disabled = !isEditable;
         }
 
+        // Populate L1 Approver Select
         var aSelect = document.getElementById('approver1Select');
         if (aSelect) {
           aSelect.innerHTML = '<option value="">-- กรุณาเลือกผู้อนุมัติระดับ 1 --</option>';
@@ -1050,13 +1143,26 @@
           aSelect.disabled = !isEditable;
         }
 
+        // Load Previous Answers
         if (tx && tx.answers) {
           self.answers = Object.assign({}, tx.answers);
         }
 
+        // Render Questions
         self.renderQuestions_(data.questions || [], isEditable);
 
+        self.updateActionButtons_(tx, isEditable);
+        self.updateProgress_();
+      },
+
+      updateActionButtons_: function(tx, isEditable) {
         var btnSave = document.getElementById('btnSaveChecklist');
+        var btnDelete = document.getElementById('btnDeleteChecklist');
+
+        if (btnDelete) {
+          btnDelete.style.display = (tx && tx.transRecordId && isEditable) ? 'block' : 'none';
+        }
+
         if (btnSave) {
           if (!isEditable) {
             btnSave.disabled = true;
@@ -1064,13 +1170,14 @@
           } else if (tx && tx.status === 'REJECTED') {
             btnSave.disabled = false;
             btnSave.textContent = '🚀 บันทึกและส่งอนุมัติใหม่ (Resubmit #' + ((tx.resubmitCount || 0) + 1) + ')';
+          } else if (tx && tx.transRecordId) {
+            btnSave.disabled = false;
+            btnSave.textContent = '💾 บันทึกการแก้ไขผลการตรวจสอบ';
           } else {
             btnSave.disabled = false;
             btnSave.textContent = '💾 บันทึกผลการตรวจสอบ';
           }
         }
-
-        self.updateProgress_();
       },
 
       renderStatusBanner_: function(tx, isEditable, lockReason) {
@@ -1090,33 +1197,40 @@
           badge.textContent = 'อนุมัติสมบูรณ์';
           badge.style.background = '#DCFCE7';
           badge.style.color = '#15803D';
+
           banner.className = 'status-banner approved';
           banner.innerHTML = '<div><strong>✅ อนุมัติสมบูรณ์แล้ว</strong><br>' +
             'อนุมัติระดับ 1: ' + (tx.approveProfile1 || '-') + ' (' + (tx.approve1Datetime || '') + ')<br>' +
             'อนุมัติระดับ 2: ' + (tx.approveProfile2 || '-') + ' (' + (tx.approve2Datetime || '') + ')</div>';
           banner.style.display = 'flex';
+
         } else if (tx.status === 'REJECTED') {
           badge.textContent = 'ถูกตีกลับ';
           badge.style.background = '#FEE2E2';
           badge.style.color = '#B91C1C';
+
           banner.className = 'status-banner rejected';
           banner.innerHTML = '<div><strong>⚠️ รายการนี้ถูกตีกลับให้แก้ไข</strong><br>' +
             'เหตุผล: ' + (tx.rejectReason || 'ไม่ได้ระบุเหตุผล') + '<br>' +
             '<small>กรุณาแก้ไขข้อมูลและกดบันทึกเพื่อส่งอนุมัติใหม่อีกครั้ง</small></div>';
           banner.style.display = 'flex';
+
         } else if (tx.status === 'PENDING_L2') {
           badge.textContent = 'รออนุมัติระดับ 2';
           badge.style.background = '#FEF3C7';
           badge.style.color = '#B45309';
+
           banner.className = 'status-banner pending';
           banner.innerHTML = '<div><strong>⏳ กำลังรอผู้อนุมัติระดับ 2</strong><br>' +
             'ผู้อนุมัติระดับ 2: ' + (tx.approveProfile2 || '-') + '<br>' +
             'ผ่านการอนุมัติระดับ 1 เมื่อ: ' + (tx.approve1Datetime || '-') + '</div>';
           banner.style.display = 'flex';
+
         } else {
           badge.textContent = 'รออนุมัติระดับ 1';
           badge.style.background = '#FEF3C7';
           badge.style.color = '#B45309';
+
           banner.className = 'status-banner pending';
           banner.innerHTML = '<div><strong>⏳ ส่งแล้ว รอผู้อนุมัติระดับ 1</strong><br>' +
             'ผู้อนุมัติระดับ 1: ' + (tx.approveProfile1 || '-') + ' (สามารถแก้ไขได้จนกว่าจะได้รับการอนุมัติ)</div>';
@@ -1137,25 +1251,32 @@
             html += '<div class="section-header">📑 ' + item.item_name + '</div>';
           } else {
             qCount++;
-            var val = this.answers[item.record_id] || '';
+            var strId = String(item.record_id).trim();
+            var val = this.answers[strId] || '';
             var activeY = val === 'Y' ? 'active-y' : '';
             var activeN = val === 'N' ? 'active-n' : '';
             var activeNA = val === '-' ? 'active-na' : '';
             var answeredClass = val ? 'answered' : '';
             var disabledAttr = isEditable ? '' : 'disabled';
 
+            // ป้องกันเลขข้อซ้ำซ้อนถ้า item_name มีเลขข้อขึ้นต้นอยู่แล้ว
+            var cleanText = String(item.item_name || '').trim();
+            var escapedId = strId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            cleanText = cleanText.replace(new RegExp('^' + escapedId + '[.\\s]+'), '');
+
+            // UX: เรียงลำดับจากซ้ายไปขวา: ➖ ไม่ตรวจ / ❌ ไม่ผ่าน / ✅ ผ่าน (สำหรับคนถนัดขวา)
             html += 
-              '<div id="q_card_' + item.record_id + '" class="question-card ' + answeredClass + '">' +
+              '<div id="q_card_' + strId + '" class="question-card ' + answeredClass + '">' +
                 '<div class="question-text">' +
-                  '<span class="question-number">' + item.record_id + '.</span> ' + item.item_name +
+                  '<span class="question-number">' + strId + '.</span> ' + cleanText +
                 '</div>' +
                 '<div class="segmented-control">' +
-                  '<button type="button" class="segmented-btn ' + activeY + '" ' + disabledAttr +
-                    ' onclick="ChecklistModule.setAnswer(' + item.record_id + ', \'Y\')">✅ ผ่าน</button>' +
-                  '<button type="button" class="segmented-btn ' + activeN + '" ' + disabledAttr +
-                    ' onclick="ChecklistModule.setAnswer(' + item.record_id + ', \'N\')">❌ ไม่ผ่าน</button>' +
                   '<button type="button" class="segmented-btn ' + activeNA + '" ' + disabledAttr +
-                    ' onclick="ChecklistModule.setAnswer(' + item.record_id + ', \'-\')">➖ ไม่ตรวจ</button>' +
+                    ' onclick="ChecklistModule.setAnswer(\'' + strId + '\', \'-\')">➖ ไม่ตรวจ</button>' +
+                  '<button type="button" class="segmented-btn ' + activeN + '" ' + disabledAttr +
+                    ' onclick="ChecklistModule.setAnswer(\'' + strId + '\', \'N\')">❌ ไม่ผ่าน</button>' +
+                  '<button type="button" class="segmented-btn ' + activeY + '" ' + disabledAttr +
+                    ' onclick="ChecklistModule.setAnswer(\'' + strId + '\', \'Y\')">✅ ผ่าน</button>' +
                 '</div>' +
               '</div>';
           }
@@ -1166,17 +1287,22 @@
       },
 
       setAnswer: function(recordId, value) {
-        this.answers[recordId] = value;
-        var card = document.getElementById('q_card_' + recordId);
+        var strId = String(recordId).trim();
+        this.answers[strId] = value;
+
+        // Update UI card
+        var card = document.getElementById('q_card_' + strId);
         if (card) {
           card.classList.add('answered');
           var btns = card.querySelectorAll('.segmented-btn');
           if (btns && btns.length === 3) {
-            btns[0].className = 'segmented-btn ' + (value === 'Y' ? 'active-y' : '');
+            // btns[0] = ➖ ไม่ตรวจ, btns[1] = ❌ ไม่ผ่าน, btns[2] = ✅ ผ่าน
+            btns[0].className = 'segmented-btn ' + (value === '-' ? 'active-na' : '');
             btns[1].className = 'segmented-btn ' + (value === 'N' ? 'active-n' : '');
-            btns[2].className = 'segmented-btn ' + (value === '-' ? 'active-na' : '');
+            btns[2].className = 'segmented-btn ' + (value === 'Y' ? 'active-y' : '');
           }
         }
+
         this.updateProgress_();
       },
 
@@ -1187,8 +1313,11 @@
         for (var i = 0; i < questions.length; i++) {
           var q = questions[i];
           if (q.header_flag === 'N') {
-            var a = this.answers[q.record_id];
-            if (a === 'Y' || a === 'N' || a === '-') answeredCount++;
+            var strId = String(q.record_id).trim();
+            var a = this.answers[strId];
+            if (a === 'Y' || a === 'N' || a === '-') {
+              answeredCount++;
+            }
           }
         }
 
@@ -1202,6 +1331,36 @@
         if (barEl) barEl.style.width = percent + '%';
       },
 
+      deleteCurrentChecklist: function() {
+        var self = this;
+        var tx = self.currentData ? self.currentData.transaction : null;
+        if (!tx || !tx.transRecordId) return;
+
+        var confirmMsg = 'คุณต้องการลบข้อมูลการตรวจสอบของวันที่ ' + (tx.transDate || '') + '\n' +
+                         'โครงการ: ' + (tx.project || '-') + '\n\n' +
+                         'คำเตือน: ข้อมูลรายการนี้จะถูกนำออกจากระบบถาวร ยืนยันที่จะลบหรือไม่?';
+
+        if (!confirm(confirmMsg)) return;
+
+        App.showLoading('กำลังลบข้อมูล...');
+        App.callServer('apiDeleteChecklist', { transRecordId: tx.transRecordId, lineUid: App.currentUser.line_uid })
+          .then(function(res) {
+            App.hideLoading();
+            if (res && res.success) {
+              App.showToast('ลบรายการเรียบร้อยแล้ว', 'success');
+              var curDate = document.getElementById('transDateInput').value;
+              self.onDateChange(curDate);
+            } else {
+              var msg = (res && res.error) ? res.error.message : 'ไม่สามารถลบรายการได้';
+              App.showToast(msg, 'error');
+            }
+          })
+          .catch(function(err) {
+            App.hideLoading();
+            App.showToast('เกิดข้อผิดพลาดในการลบ: ' + err.message, 'error');
+          });
+      },
+
       submitChecklist: function() {
         var self = this;
         if (!App.currentUser) return;
@@ -1210,18 +1369,29 @@
         var project = document.getElementById('projectSelect').value;
         var approver1 = document.getElementById('approver1Select').value;
 
-        if (!transDate) { App.showToast('กรุณาระบุวันที่ตรวจสอบ', 'warning'); return; }
-        if (!project) { App.showToast('กรุณาเลือกโครงการ', 'warning'); return; }
-        if (!approver1) { App.showToast('กรุณาเลือกผู้อนุมัติระดับ 1', 'warning'); return; }
+        if (!transDate) {
+          App.showToast('กรุณาระบุวันที่ตรวจสอบ', 'warning');
+          return;
+        }
+        if (!project) {
+          App.showToast('กรุณาเลือกโครงการ', 'warning');
+          return;
+        }
+        if (!approver1) {
+          App.showToast('กรุณาเลือกผู้อนุมัติระดับ 1', 'warning');
+          return;
+        }
 
+        // ตรวจสอบว่าตอบครบทุกข้อ
         var questions = (self.currentData && self.currentData.questions) ? self.currentData.questions : [];
         for (var i = 0; i < questions.length; i++) {
           var q = questions[i];
           if (q.header_flag === 'N') {
-            var ans = self.answers[q.record_id];
+            var strId = String(q.record_id).trim();
+            var ans = self.answers[strId];
             if (ans !== 'Y' && ans !== 'N' && ans !== '-') {
-              App.showToast('กรุณาตอบคำถามข้อ ' + q.record_id + ' ให้เรียบร้อย', 'warning');
-              var card = document.getElementById('q_card_' + q.record_id);
+              App.showToast('กรุณาตอบคำถามข้อ ' + strId + ' ให้เรียบร้อย', 'warning');
+              var card = document.getElementById('q_card_' + strId);
               if (card) {
                 card.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 card.style.borderColor = '#EF4444';
@@ -1603,7 +1773,9 @@
                 '<th style="padding: 8px 10px;">ผลการตรวจสอบ</th>' +
               '</tr>';
 
-            keys.sort(function(a, b) { return Number(a) - Number(b); });
+            keys.sort(function(a, b) {
+              return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
+            });
 
             for (var k = 0; k < keys.length; k++) {
               var qId = keys[k];

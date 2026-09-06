@@ -156,12 +156,21 @@ var App = {
 
     if (action === 'verifyUser') {
       body.lineUid = args[0];
-    } else if (action === 'getChecklistForm') {
+    } else if (action === 'getChecklistForm' || action === 'getTransactionByDate') {
       body.lineUid = args[0];
       body.transDate = args[1];
     } else if (action === 'getApprovalQueue') {
       body.lineUid = args[0];
       body.monthFilter = args[1];
+    } else if (action === 'deleteChecklist') {
+      var delPayload = args[0] || {};
+      if (typeof delPayload === 'object') {
+        body.transRecordId = delPayload.transRecordId;
+        body.lineUid = delPayload.lineUid;
+      } else {
+        body.transRecordId = args[0];
+        body.lineUid = args[1];
+      }
     } else if (action === 'saveChecklist' || action === 'resubmitChecklist' || action === 'approveAction' || action === 'rejectAction') {
       var payload = args[0] || {};
       for (var k in payload) {

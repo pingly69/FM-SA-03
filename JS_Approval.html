@@ -351,7 +351,9 @@ var ApprovalModule = {
             '<th style="padding: 8px 10px;">ผลการตรวจสอบ</th>' +
           '</tr>';
 
-        keys.sort(function(a, b) { return Number(a) - Number(b); });
+        keys.sort(function(a, b) {
+          return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
+        });
 
         for (var k = 0; k < keys.length; k++) {
           var qId = keys[k];
