@@ -102,11 +102,116 @@ var ChecklistModule = {
     self.updateProgress_();
   },
 
-  loadForm: function(transDate) {
+  CACHE_KEYS: {
+    QUESTIONS: 'FMSA03_LOCAL_QUESTIONS',
+    PROJECTS: 'FMSA03_LOCAL_PROJECTS',
+    TIME: 'FMSA03_LOCAL_CACHE_TIME'
+  },
+  CACHE_TTL_MS: 24 * 60 * 60 * 1000, // 24 ชั่วโมง (24 Hours)
+
+  getLocalCache_: function() {
+    try {
+      var timeStr = localStorage.getItem(this.CACHE_KEYS.TIME);
+      if (!timeStr) return null;
+      var age = Date.now() - Number(timeStr);
+      if (isNaN(age) || age > this.CACHE_TTL_MS || age < 0) {
+        return null;
+      }
+      var qRaw = localStorage.getItem(this.CACHE_KEYS.QUESTIONS);
+      var pRaw = localStorage.getItem(this.CACHE_KEYS.PROJECTS);
+      if (!qRaw || !pRaw) return null;
+
+      var questions = JSON.parse(qRaw);
+      var projects = JSON.parse(pRaw);
+      if (!Array.isArray(questions) || questions.length === 0 || !Array.isArray(projects) || projects.length === 0) {
+        return null;
+      }
+      return {
+        questions: questions,
+        projects: projects,
+        timestamp: Number(timeStr)
+      };
+    } catch (e) {
+      console.warn('[ChecklistModule] getLocalCache_ error:', e);
+      return null;
+    }
+  },
+
+  setLocalCache_: function(questions, projects) {
+    try {
+      if (Array.isArray(questions) && questions.length > 0) {
+        localStorage.setItem(this.CACHE_KEYS.QUESTIONS, JSON.stringify(questions));
+      }
+      if (Array.isArray(projects) && projects.length > 0) {
+        localStorage.setItem(this.CACHE_KEYS.PROJECTS, JSON.stringify(projects));
+      }
+      localStorage.setItem(this.CACHE_KEYS.TIME, String(Date.now()));
+    } catch (e) {
+      console.warn('[ChecklistModule] setLocalCache_ error:', e);
+    }
+  },
+
+  clearLocalCache_: function() {
+    try {
+      localStorage.removeItem(this.CACHE_KEYS.QUESTIONS);
+      localStorage.removeItem(this.CACHE_KEYS.PROJECTS);
+      localStorage.removeItem(this.CACHE_KEYS.TIME);
+    } catch (e) {
+      console.warn('[ChecklistModule] clearLocalCache_ error:', e);
+    }
+  },
+
+  forceRefreshCache: function() {
+    var self = this;
+    self.clearLocalCache_();
+    App.showToast('กำลังดึงข้อมูลโครงการและแบบฟอร์มคำถามล่าสุดจาก Server...', 'info');
+    var dateInput = document.getElementById('transDateInput');
+    var targetDate = (dateInput && dateInput.value) ? dateInput.value : self.getTodayString_();
+    self.loadForm(targetDate, true);
+  },
+
+  renderProjectDropdown_: function(projects, selectedProject, isEditable) {
+    var pSelect = document.getElementById('projectSelect');
+    if (!pSelect) return;
+    var currentVal = (selectedProject !== undefined && selectedProject !== null && selectedProject !== '') 
+      ? selectedProject 
+      : pSelect.value;
+
+    pSelect.innerHTML = '<option value="">-- กรุณาเลือกโครงการ --</option>';
+    (projects || []).forEach(function(p) {
+      var opt = document.createElement('option');
+      opt.value = p;
+      opt.textContent = p;
+      if (currentVal === p) opt.selected = true;
+      pSelect.appendChild(opt);
+    });
+
+    if (isEditable !== undefined) {
+      pSelect.disabled = !isEditable;
+    }
+  },
+
+  loadForm: function(transDate, isForceRefresh) {
     var self = this;
     if (!App.currentUser) return;
 
-    App.showLoading('กำลังโหลดแบบฟอร์มตรวจสอบ...');
+    var cached = !isForceRefresh ? self.getLocalCache_() : null;
+
+    // Fast Path: เรนเดอร์โครงการและคำถามจาก Local Storage ทันที (< 0.05 วินาที)
+    if (cached) {
+      if (cached.projects && cached.projects.length > 0) {
+        self.renderProjectDropdown_(cached.projects);
+      }
+      var qContainer = document.getElementById('questionsContainer');
+      if (qContainer && (!qContainer.children || qContainer.children.length === 0)) {
+        self.renderQuestions_(cached.questions, true);
+      }
+    }
+
+    if (!cached || isForceRefresh) {
+      App.showLoading(isForceRefresh ? 'กำลังอัปเดตข้อมูลล่าสุดจากส่วนกลาง...' : 'กำลังโหลดแบบฟอร์มตรวจสอบ...');
+    }
+
     self.answers = {};
 
     App.callServer('apiGetChecklistForm', App.currentUser.line_uid, transDate)
@@ -114,7 +219,17 @@ var ChecklistModule = {
         App.hideLoading();
         if (res && res.success && res.data) {
           self.currentData = res.data;
+
+          // บันทึกคำถามและโครงการลง Local Cache สำหรับใช้งาน 24 ชั่วโมง
+          if (res.data.questions && res.data.projects) {
+            self.setLocalCache_(res.data.questions, res.data.projects);
+          }
+
           self.renderForm_(res.data);
+
+          if (isForceRefresh) {
+            App.showToast('อัปเดตข้อมูลโครงการและแบบสอบถามล่าสุดเรียบร้อยแล้ว', 'success');
+          }
         } else {
           var err = (res && res.error) ? res.error.message : 'ไม่สามารถโหลดฟอร์มได้';
           App.showToast(err, 'error');
@@ -135,18 +250,7 @@ var ChecklistModule = {
     self.renderStatusBanner_(tx, isEditable, data.lockReason);
 
     // Populate Project Select
-    var pSelect = document.getElementById('projectSelect');
-    if (pSelect) {
-      pSelect.innerHTML = '<option value="">-- กรุณาเลือกโครงการ --</option>';
-      (data.projects || []).forEach(function(p) {
-        var opt = document.createElement('option');
-        opt.value = p;
-        opt.textContent = p;
-        if (tx && tx.project === p) opt.selected = true;
-        pSelect.appendChild(opt);
-      });
-      pSelect.disabled = !isEditable;
-    }
+    self.renderProjectDropdown_(data.projects || [], tx ? tx.project : '', isEditable);
 
     // Populate L1 Approver Select
     var aSelect = document.getElementById('approver1Select');

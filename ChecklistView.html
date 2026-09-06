@@ -5,8 +5,15 @@
 
   <!-- Header Card: Project & Approver Selection -->
   <div class="card">
-    <div class="card-header">
-      <span>📋 ข้อมูลการตรวจสอบ</span>
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span>📋 ข้อมูลการตรวจสอบ</span>
+        <button type="button" id="btnRefreshMasterCache" onclick="ChecklistModule.forceRefreshCache()" 
+          title="กดเพื่อดึงรายชื่อโครงการและแบบฟอร์มคำถามล่าสุดจากส่วนกลาง" 
+          style="background: #F1F5F9; border: 1px solid #CBD5E1; color: #475569; font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-weight: 500;">
+          🔄 อัปเดตข้อมูล
+        </button>
+      </div>
       <span id="transStatusBadge" class="brand-badge" style="background:#E2E8F0; color:#334155;">ใหม่</span>
     </div>
 
