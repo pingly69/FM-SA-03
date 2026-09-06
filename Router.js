@@ -34,7 +34,7 @@ function doGet(e) {
 
   // HTML Web App Mode
   return HtmlService.createHtmlOutputFromFile('index')
-    .setTitle('FM-SA-03 | แบบตรวจความปลอดภัย & อนุมัติ')
+    .setTitle('FM-SA-03 v1.0 | แบบตรวจความปลอดภัย & อนุมัติ')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
