@@ -181,6 +181,55 @@ var CentralApiService = (function() {
         'คลังสินค้ากลาง (Rayong)',
         'ศูนย์กระจายสินค้า (Ayutthaya)'
       ];
+    },
+
+    /**
+     * ดึง Map รายชื่อผู้ใช้ตาม LINE UID { [line_uid]: users_name }
+     * เพื่อนำชื่อผู้ตรวจไปแสดงผลแทน LINE UID ในหน้าจออนุมัติ
+     * แคชใน ScriptCache 30 นาที (1800 วินาที) ทำให้ไม่ต้องโหลดซ้ำ และไม่ทำให้ระบบช้าลง
+     */
+    getUserMapByLineUid: function() {
+      var cache = CacheService.getScriptCache();
+      var cacheKey = 'USER_MAP_BY_LINE_UID';
+      var cached = cache.get(cacheKey);
+      if (cached) {
+        try {
+          return JSON.parse(cached);
+        } catch (e) {}
+      }
+
+      var payload = {
+        action: 'getList',
+        datasetKey: 'users_profile',
+        forceFresh: false
+      };
+
+      try {
+        var res = postRequest_(payload);
+        if (res && res.ok && res.data && res.data.byLineUid) {
+          var simpleMap = {
+            'MOCK_LINE_UID_001': 'นายสมเกียรติ มั่นคง (ช่างเทคนิค)',
+            'MOCK_USER_001': 'ผู้ทดสอบระบบ (Dev Tester)'
+          };
+          var rawMap = res.data.byLineUid;
+          for (var uid in rawMap) {
+            if (rawMap.hasOwnProperty(uid)) {
+              var u = rawMap[uid];
+              if (u && u.users_name) {
+                simpleMap[uid] = u.users_name;
+              }
+            }
+          }
+          try {
+            cache.put(cacheKey, JSON.stringify(simpleMap), 1800);
+          } catch (ce) {}
+          return simpleMap;
+        }
+      } catch (e) {
+        Logger.log('[CentralApiService] getUserMapByLineUid failed: ' + e);
+      }
+
+      return {};
     }
   };
 })();

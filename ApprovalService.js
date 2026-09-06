@@ -29,6 +29,17 @@ var ApprovalService = (function() {
       var l2Approvers = CentralApiService.getApproveList(Config.getApproveTagL2());
       var questions = FormMasterRepo.getFormMasterCached();
 
+      // ดึง Map รายชื่อผู้ใช้เพื่อแปลง lineUid เป็นชื่อผู้ตรวจ (userName) โดยดึงจากแคชความเร็วสูง
+      var userMap = CentralApiService.getUserMapByLineUid();
+      for (var i = 0; i < asL1.length; i++) {
+        var u1 = asL1[i].lineUid;
+        asL1[i].userName = userMap[u1] || u1;
+      }
+      for (var j = 0; j < asL2.length; j++) {
+        var u2 = asL2[j].lineUid;
+        asL2[j].userName = userMap[u2] || u2;
+      }
+
       return {
         user: user,
         approverName: approverName,

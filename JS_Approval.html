@@ -136,7 +136,9 @@ var ApprovalModule = {
           '</div>' +
 
           '<div class="queue-meta">' +
-            '<span>👤 ผู้ตรวจ: <strong>' + (item.lineUid || '-') + '</strong></span>' +
+            '<span>👤 ผู้ตรวจ: <strong>' + (item.userName || item.lineUid || '-') + '</strong></span>' +
+            '<span>👔 ผู้อนุมัติ L1: <strong>' + (item.approveProfile1 || '-') + '</strong></span>' +
+            (item.approveProfile2 ? '<span>👔 ผู้อนุมัติ L2: <strong>' + item.approveProfile2 + '</strong></span>' : '') +
             '<span>📝 ตอบแล้ว: <strong>' + answersCount + ' ข้อ</strong></span>' +
             (item.resubmitCount > 0 ? '<span style="color:#B91C1C;">🔄 ตีกลับแล้ว ' + item.resubmitCount + ' ครั้ง</span>' : '') +
           '</div>' +
@@ -334,7 +336,7 @@ var ApprovalModule = {
       metaEl.innerHTML = 
         '<div><strong>โครงการ:</strong> ' + (target.project || '-') + '</div>' +
         '<div><strong>วันที่ตรวจ:</strong> ' + target.transDate + ' | <strong>เวลาบันทึก:</strong> ' + (target.createDatetime || '-') + '</div>' +
-        '<div><strong>ผู้ตรวจ:</strong> ' + (target.lineUid || '-') + '</div>' +
+        '<div><strong>ผู้ตรวจ:</strong> ' + (target.userName || target.lineUid || '-') + '</div>' +
         '<div><strong>ผู้อนุมัติ L1:</strong> ' + (target.approveProfile1 || '-') + '</div>' +
         (target.approveProfile2 ? '<div><strong>ผู้อนุมัติ L2:</strong> ' + target.approveProfile2 + '</div>' : '');
     }
