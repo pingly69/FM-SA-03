@@ -23,10 +23,16 @@ var ApprovalService = (function() {
     getApprovalQueue: function(lineUid, monthFilter) {
       var user = getApproverUser_(lineUid);
       var approverName = String(user.users_name || '').trim();
+      var steps = Config.getApprovalSteps();
 
       var asL1 = TransactionRepo.findPendingL1Queue(approverName, monthFilter);
-      var asL2 = TransactionRepo.findPendingL2Queue(approverName);
-      var l2Approvers = CentralApiService.getApproveList(Config.getApproveTagL2());
+      var asL2 = [];
+      var l2Approvers = [];
+
+      if (steps > 1) {
+        asL2 = TransactionRepo.findPendingL2Queue(approverName);
+        l2Approvers = CentralApiService.getApproveList(Config.getApproveTagL2());
+      }
       var questions = FormMasterRepo.getFormMasterCached();
 
       // ดึง Map รายชื่อผู้ใช้เพื่อแปลง lineUid เป็นชื่อผู้ตรวจ (userName) โดยดึงจากแคชความเร็วสูง
@@ -35,14 +41,17 @@ var ApprovalService = (function() {
         var u1 = asL1[i].lineUid;
         asL1[i].userName = userMap[u1] || u1;
       }
-      for (var j = 0; j < asL2.length; j++) {
-        var u2 = asL2[j].lineUid;
-        asL2[j].userName = userMap[u2] || u2;
+      if (steps > 1) {
+        for (var j = 0; j < asL2.length; j++) {
+          var u2 = asL2[j].lineUid;
+          asL2[j].userName = userMap[u2] || u2;
+        }
       }
 
       return {
         user: user,
         approverName: approverName,
+        approvalSteps: steps,
         asL1: asL1,
         asL2: asL2,
         l2Approvers: l2Approvers,
@@ -55,18 +64,19 @@ var ApprovalService = (function() {
      * @param {string} lineUid LINE UID ของผู้อนุมัติ
      * @param {number} level 1 หรือ 2
      * @param {Array<number>} transRecordIds รายการ ID ที่ต้องการอนุมัติ
-     * @param {string} [approveProfile2] ชื่อผู้อนุมัติระดับ 2 (จำเป็นเมื่อ level=1)
+     * @param {string} [approveProfile2] ชื่อผู้อนุมัติระดับ 2 (จำเป็นเมื่อ level=1 และ steps > 1)
      */
     approveAction: function(lineUid, level, transRecordIds, approveProfile2) {
       var user = getApproverUser_(lineUid);
       var approverName = String(user.users_name || '').trim();
+      var steps = Config.getApprovalSteps();
 
       if (!Array.isArray(transRecordIds) || transRecordIds.length === 0) {
         throw new Error('กรุณาเลือกอย่างน้อย 1 รายการที่ต้องการอนุมัติ');
       }
 
       var lvl = Number(level);
-      if (lvl === 1 && !approveProfile2) {
+      if (lvl === 1 && steps > 1 && !approveProfile2) {
         throw new Error('กรุณาระบุผู้อนุมัติระดับ 2 ก่อนยืนยันการอนุมัติ (V-6)');
       }
 
@@ -91,16 +101,31 @@ var ApprovalService = (function() {
           if (tx.status !== 'PENDING_L1') {
             throw new Error('รายการรหัส ' + tx.transRecordId + ' ไม่อยู่ในสถานะรออนุมัติระดับ 1');
           }
-          updatesList.push({
-            transRecordId: tx.transRecordId,
-            updates: {
-              status: 'PENDING_L2',
-              approve1Result: 'APPROVED',
-              approve1Datetime: now,
-              approveProfile2: approveProfile2,
-              updateDatetime: now
-            }
-          });
+
+          if (steps === 1) {
+            // กรณีอนุมัติ 1 ขั้นตอน: เปลี่ยนเป็น APPROVED สมบูรณ์ทันที
+            updatesList.push({
+              transRecordId: tx.transRecordId,
+              updates: {
+                status: 'APPROVED',
+                approve1Result: 'APPROVED',
+                approve1Datetime: now,
+                updateDatetime: now
+              }
+            });
+          } else {
+            // กรณีอนุมัติ 2 ขั้นตอน: ส่งต่อไปยัง PENDING_L2
+            updatesList.push({
+              transRecordId: tx.transRecordId,
+              updates: {
+                status: 'PENDING_L2',
+                approve1Result: 'APPROVED',
+                approve1Datetime: now,
+                approveProfile2: approveProfile2,
+                updateDatetime: now
+              }
+            });
+          }
           validTxList.push(tx);
         } else if (lvl === 2) {
           if (tx.approveProfile2 !== approverName) {
@@ -130,7 +155,24 @@ var ApprovalService = (function() {
       // 4. ส่งการแจ้งเตือน LINE แบบรวมยอด (Batch Notification) 1 ข้อความต่อ 1 ผู้รับ
       // ทำงานใน try...catch เพื่อไม่ให้ข้อผิดพลาดของ LINE กระทบต่อผลการอนุมัติใน Google Sheets
       try {
-        if (lvl === 1) {
+        if (lvl === 1 && steps === 1) {
+          // แจ้งเตือนผู้ตรวจ (Requester) เมื่ออนุมัติสมบูรณ์ในขั้นตอนเดียว
+          var txByReq1 = {};
+          for (var r1 = 0; r1 < validTxList.length; r1++) {
+            var reqUid1 = validTxList[r1].lineUid;
+            if (reqUid1) {
+              if (!txByReq1[reqUid1]) txByReq1[reqUid1] = [];
+              txByReq1[reqUid1].push(validTxList[r1]);
+            }
+          }
+          for (var uidKey1 in txByReq1) {
+            if (txByReq1.hasOwnProperty(uidKey1)) {
+              var reqItems1 = txByReq1[uidKey1];
+              var summaryReq1 = NotifyService.buildBatchSummary(reqItems1);
+              NotifyService.notifyRequesterApprovedBatch(uidKey1, approverName, summaryReq1, Config.getApproveTagL1());
+            }
+          }
+        } else if (lvl === 1 && steps > 1) {
           // ค้นหา line_uid ของผู้อนุมัติ L2 จาก Central API
           var l2List = CentralApiService.getApproveList(Config.getApproveTagL2());
           var l2User = null;
@@ -158,7 +200,7 @@ var ApprovalService = (function() {
             if (txByRequester.hasOwnProperty(uidKey)) {
               var reqItems = txByRequester[uidKey];
               var summaryReq = NotifyService.buildBatchSummary(reqItems);
-              NotifyService.notifyRequesterApprovedBatch(uidKey, approverName, summaryReq);
+              NotifyService.notifyRequesterApprovedBatch(uidKey, approverName, summaryReq, Config.getApproveTagL2());
             }
           }
         }

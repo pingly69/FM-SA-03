@@ -15,7 +15,8 @@ var Config = (function() {
     APPROVE_TAG_L2: 'จป.บริหาร',
     SCREEN_TAG: 'SA03',
     PROJECT_DATASET_KEY: 'site',
-    ENABLE_SHEET_FALLBACK: 'false'
+    ENABLE_SHEET_FALLBACK: 'false',
+    APPROVAL_STEPS: '2'
   };
 
   // ตัวแปรแคชในหน่วยความจำ อ่าน Properties ครั้งเดียวต่อ 1 Execution Context
@@ -74,6 +75,9 @@ var Config = (function() {
     },
     isSheetFallbackEnabled: function() {
       return getProp_('ENABLE_SHEET_FALLBACK') === 'true';
+    },
+    getApprovalSteps: function() {
+      return Number(getProp_('APPROVAL_STEPS')) || 2;
     },
     clearCache: function() {
       _loadedProps = null;

@@ -155,15 +155,16 @@ var NotifyService = (function() {
     },
 
     /**
-     * แจ้งเตือนผู้ตรวจ (Requester) แบบรวมยอดเมื่อ L2 อนุมัติสมบูรณ์ (L2 Batch Approval)
+     * แจ้งเตือนผู้ตรวจ (Requester) แบบรวมยอดเมื่ออนุมัติสมบูรณ์ (Batch Approval)
      */
-    notifyRequesterApprovedBatch: function(requesterLineUid, l2ApproverName, summary) {
+    notifyRequesterApprovedBatch: function(requesterLineUid, approverName, summary, approverRole) {
       var countText = summary.totalCount > 1 ? summary.totalCount + ' รายการ' : '1 รายการ';
+      var approverLabel = approverRole ? 'ผู้อนุมัติ (' + approverRole + ')' : 'ผู้อนุมัติ';
       var text = '✅ รายการตรวจความปลอดภัย (FM-SA-03) อนุมัติสมบูรณ์แล้ว\n' +
         '• จำนวน: ' + countText + '\n' +
         '• โครงการ: ' + (summary.projectsStr || 'ไม่ระบุ') + '\n' +
         '• วันที่ตรวจ: ' + (summary.dateRangeStr || '-') + '\n' +
-        '• ผู้อนุมัติระดับ 2: ' + (l2ApproverName || '') + '\n' +
+        '• ' + approverLabel + ': ' + (approverName || '') + '\n' +
         '• สถานะ: อนุมัติสมบูรณ์ (Approved) เรียบร้อยแล้วทุกรายการ';
 
       return sendPush_(requesterLineUid, {

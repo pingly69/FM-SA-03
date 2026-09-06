@@ -659,7 +659,7 @@
 
     <!-- Approval Queue View -->
     <div id="approvalView" class="view-panel" style="display: none;">
-      <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+      <div id="approverSubtabsContainer" style="display: flex; gap: 8px; margin-bottom: 14px;">
         <button id="subtabL1Btn" class="btn btn-primary" style="flex: 1; padding: 10px;" onclick="ApprovalModule.switchSubtab('L1')">
           ⏳ รออนุมัติระดับ 1 <span id="badgeL1Count" class="badge-counter" style="display:none;">0</span>
         </button>
@@ -1500,6 +1500,7 @@
 
     var ApprovalModule = {
       activeSubtab: 'L1',
+      approvalSteps: 2,
       asL1: [],
       asL2: [],
       l2Approvers: [],
@@ -1515,6 +1516,24 @@
 
       onMonthChange: function() {
         this.loadQueue();
+      },
+
+      applyApprovalStepsUI_: function() {
+        var btnL2 = document.getElementById('subtabL2Btn');
+        var btnL1 = document.getElementById('subtabL1Btn');
+
+        if (this.approvalSteps === 1) {
+          if (btnL2) btnL2.style.display = 'none';
+          if (btnL1) {
+            btnL1.innerHTML = '⏳ รายการรออนุมัติ <span id="badgeL1Count" class="badge-counter" style="display:none;">0</span>';
+          }
+          this.activeSubtab = 'L1';
+        } else {
+          if (btnL2) btnL2.style.display = 'block';
+          if (btnL1) {
+            btnL1.innerHTML = '⏳ รออนุมัติระดับ 1 <span id="badgeL1Count" class="badge-counter" style="display:none;">0</span>';
+          }
+        }
       },
 
       switchSubtab: function(tab) {
@@ -1554,11 +1573,13 @@
           .then(function(res) {
             App.hideLoading();
             if (res && res.success && res.data) {
+              self.approvalSteps = Number(res.data.approvalSteps) || 2;
               self.asL1 = res.data.asL1 || [];
               self.asL2 = res.data.asL2 || [];
               self.l2Approvers = res.data.l2Approvers || [];
               self.questions = res.data.questions || [];
 
+              self.applyApprovalStepsUI_();
               self.updateBadges_();
               self.renderCards_();
               self.updateBottomBar_();
@@ -1679,7 +1700,11 @@
       openApproveModal: function() {
         if (this.selectedIds.length === 0) return;
 
-        if (this.activeSubtab === 'L1') {
+        if (this.approvalSteps === 1) {
+          if (confirm('ยืนยันอนุมัติรายการที่เลือกทั้งหมด ' + this.selectedIds.length + ' รายการ?')) {
+            this.confirmApproveSingleStep_();
+          }
+        } else if (this.activeSubtab === 'L1') {
           var select = document.getElementById('modalL2Select');
           if (select) {
             select.innerHTML = '<option value="">-- กรุณาเลือกผู้อนุมัติระดับ 2 --</option>';
@@ -1696,6 +1721,33 @@
             this.confirmApproveL2_();
           }
         }
+      },
+
+      confirmApproveSingleStep_: function() {
+        var self = this;
+        App.showLoading('กำลังดำเนินการอนุมัติสมบูรณ์...');
+
+        var payload = {
+          lineUid: App.currentUser.line_uid,
+          level: 1,
+          transRecordIds: self.selectedIds
+        };
+
+        App.callServer('apiApproveAction', payload)
+          .then(function(res) {
+            App.hideLoading();
+            if (res && res.success) {
+              App.showToast('อนุมัติสมบูรณ์เรียบร้อยแล้ว (' + res.data.updatedCount + ' รายการ)', 'success');
+              self.loadQueue();
+            } else {
+              var msg = (res && res.error) ? res.error.message : 'เกิดข้อผิดพลาดในการอนุมัติ';
+              App.showToast(msg, 'error');
+            }
+          })
+          .catch(function(err) {
+            App.hideLoading();
+            App.showToast('อนุมัติล้มเหลว: ' + err.message, 'error');
+          });
       },
 
       confirmApproveL1: function() {
