@@ -2193,54 +2193,100 @@
         var ansEl = document.getElementById('detailAnswersContent');
         if (ansEl) {
           var answers = target.answers || {};
-          var keys = Object.keys(answers);
+          var questions = self.questions || [];
 
-          if (keys.length === 0) {
+          if (Object.keys(answers).length === 0 && questions.length === 0) {
             ansEl.innerHTML = '<div style="color:#64748B; padding:10px;">ไม่มีข้อมูลคำตอบ</div>';
           } else {
-            var qMap = {};
-            (self.questions || []).forEach(function(q) {
-              if (q && q.record_id !== undefined) {
-                qMap[String(q.record_id).trim()] = q.item_name || '';
-              }
-            });
-
             var html = '<table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">' +
-              '<tr style="background:#F1F5F9; text-align:left; border-bottom: 2px solid #CBD5E1;">' +
-                '<th style="padding: 8px 10px; width: 55px;">ข้อ</th>' +
-                '<th style="padding: 8px 10px;">หัวข้อการตรวจสอบ</th>' +
-                '<th style="padding: 8px 10px; width: 85px; text-align: center;">ผลตรวจ</th>' +
-              '</tr>';
+              '<thead>' +
+                '<tr>' +
+                  '<th style="padding: 8px 10px; width: 60px; background:#F1F5F9; position: sticky; top: 0; z-index: 2; border-bottom: 2px solid #CBD5E1; color: #334155; text-align: left;">ข้อ</th>' +
+                  '<th style="padding: 8px 10px; background:#F1F5F9; position: sticky; top: 0; z-index: 2; border-bottom: 2px solid #CBD5E1; color: #334155; text-align: left;">หัวข้อการตรวจสอบ</th>' +
+                  '<th style="padding: 8px 10px; width: 85px; text-align: center; background:#F1F5F9; position: sticky; top: 0; z-index: 2; border-bottom: 2px solid #CBD5E1; color: #334155;">ผลตรวจ</th>' +
+                '</tr>' +
+              '</thead>' +
+              '<tbody>';
 
-            keys.sort(function(a, b) {
-              return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
-            });
+            var renderedQIds = {};
 
-            for (var k = 0; k < keys.length; k++) {
-              var qId = keys[k];
-              var ans = answers[qId];
-              var badgeHtml = '';
+            if (questions.length > 0) {
+              // เรียงตามโครงสร้างชีต FORM_MASTER จากบนลงล่างตามปกติ
+              for (var i = 0; i < questions.length; i++) {
+                var item = questions[i];
+                if (!item) continue;
 
-              if (ans === 'Y') {
-                badgeHtml = '<span style="background:#DCFCE7; color:#15803D; font-weight:700; padding:2px 8px; border-radius:4px; font-size:0.80rem; white-space:nowrap;">✅ ผ่าน</span>';
-              } else if (ans === 'N') {
-                badgeHtml = '<span style="background:#FEE2E2; color:#B91C1C; font-weight:700; padding:2px 8px; border-radius:4px; font-size:0.80rem; white-space:nowrap;">❌ ไม่ผ่าน</span>';
-              } else {
-                badgeHtml = '<span style="background:#E2E8F0; color:#475569; font-weight:600; padding:2px 8px; border-radius:4px; font-size:0.80rem; white-space:nowrap;">➖ ไม่ตรวจ</span>';
+                if (item.header_flag === 'Y') {
+                  // แถวหัวข้อ (Section Header) คั่นหมวดหมู่ พาดเต็ม 3 คอลัมน์
+                  html += '<tr style="background: #EFF6FF; border-top: 2px solid #BFDBFE; border-bottom: 1px solid #BFDBFE;">' +
+                    '<td colspan="3" style="padding: 9px 10px; font-weight: 700; color: #1E40AF; font-size: 0.90rem;">' +
+                      '📑 ' + (item.item_name || '') +
+                    '</td>' +
+                  '</tr>';
+                } else {
+                  // แถวคำถาม
+                  var qId = String(item.record_id).trim();
+                  renderedQIds[qId] = true;
+                  var ans = answers[qId];
+                  var badgeHtml = '';
+
+                  if (ans === 'Y') {
+                    badgeHtml = '<span style="background:#DCFCE7; color:#15803D; font-weight:700; padding:2px 8px; border-radius:4px; font-size:0.80rem; white-space:nowrap;">✅ ผ่าน</span>';
+                  } else if (ans === 'N') {
+                    badgeHtml = '<span style="background:#FEE2E2; color:#B91C1C; font-weight:700; padding:2px 8px; border-radius:4px; font-size:0.80rem; white-space:nowrap;">❌ ไม่ผ่าน</span>';
+                  } else if (ans === '-') {
+                    badgeHtml = '<span style="background:#E2E8F0; color:#475569; font-weight:600; padding:2px 8px; border-radius:4px; font-size:0.80rem; white-space:nowrap;">➖ ไม่ตรวจ</span>';
+                  } else {
+                    badgeHtml = '<span style="background:#FEF3C7; color:#B45309; font-weight:600; padding:2px 8px; border-radius:4px; font-size:0.80rem; white-space:nowrap;">-</span>';
+                  }
+
+                  var qTitle = String(item.item_name || '').trim();
+                  var escapedId = qId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                  qTitle = qTitle.replace(new RegExp('^' + escapedId + '[.\\s]+'), '');
+
+                  html += '<tr style="border-bottom: 1px solid #E2E8F0;">' +
+                    '<td style="padding: 8px 10px; font-weight: 700; color: #2563EB; vertical-align: top; white-space: nowrap;">ข้อ ' + qId + '</td>' +
+                    '<td style="padding: 8px 10px; color: #1E293B; vertical-align: top; line-height: 1.4;">' + (qTitle || '-') + '</td>' +
+                    '<td style="padding: 8px 10px; text-align: center; vertical-align: top;">' + badgeHtml + '</td>' +
+                  '</tr>';
+                }
               }
-
-              var qTitle = qMap[qId] || '';
-              var escapedId = String(qId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-              qTitle = qTitle.replace(new RegExp('^' + escapedId + '[.\\s]+'), '');
-
-              html += '<tr style="border-bottom: 1px solid #E2E8F0;">' +
-                '<td style="padding: 8px 10px; font-weight: 700; color: #2563EB; vertical-align: top; white-space: nowrap;">ข้อ ' + qId + '</td>' +
-                '<td style="padding: 8px 10px; color: #1E293B; vertical-align: top; line-height: 1.4;">' + (qTitle || '-') + '</td>' +
-                '<td style="padding: 8px 10px; text-align: center; vertical-align: top;">' + badgeHtml + '</td>' +
-              '</tr>';
             }
 
-            html += '</table>';
+            // Defensive Fallback: หากมีคำตอบใน answers ที่ไม่มีอยู่ใน questions ให้แสดงต่อท้าย
+            var ansKeys = Object.keys(answers);
+            var unrenderedKeys = [];
+            for (var k = 0; k < ansKeys.length; k++) {
+              if (!renderedQIds[ansKeys[k]]) {
+                unrenderedKeys.push(ansKeys[k]);
+              }
+            }
+
+            if (unrenderedKeys.length > 0) {
+              unrenderedKeys.sort(function(a, b) {
+                return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
+              });
+              for (var u = 0; u < unrenderedKeys.length; u++) {
+                var uId = unrenderedKeys[u];
+                var uAns = answers[uId];
+                var uBadgeHtml = '';
+                if (uAns === 'Y') {
+                  uBadgeHtml = '<span style="background:#DCFCE7; color:#15803D; font-weight:700; padding:2px 8px; border-radius:4px; font-size:0.80rem; white-space:nowrap;">✅ ผ่าน</span>';
+                } else if (uAns === 'N') {
+                  uBadgeHtml = '<span style="background:#FEE2E2; color:#B91C1C; font-weight:700; padding:2px 8px; border-radius:4px; font-size:0.80rem; white-space:nowrap;">❌ ไม่ผ่าน</span>';
+                } else {
+                  uBadgeHtml = '<span style="background:#E2E8F0; color:#475569; font-weight:600; padding:2px 8px; border-radius:4px; font-size:0.80rem; white-space:nowrap;">➖ ไม่ตรวจ</span>';
+                }
+
+                html += '<tr style="border-bottom: 1px solid #E2E8F0;">' +
+                  '<td style="padding: 8px 10px; font-weight: 700; color: #2563EB; vertical-align: top; white-space: nowrap;">ข้อ ' + uId + '</td>' +
+                  '<td style="padding: 8px 10px; color: #1E293B; vertical-align: top; line-height: 1.4;">-</td>' +
+                  '<td style="padding: 8px 10px; text-align: center; vertical-align: top;">' + uBadgeHtml + '</td>' +
+                '</tr>';
+              }
+            }
+
+            html += '</tbody></table>';
             ansEl.innerHTML = html;
           }
         }
