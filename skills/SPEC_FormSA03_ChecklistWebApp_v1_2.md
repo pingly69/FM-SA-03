@@ -1,8 +1,16 @@
 # SPEC: FormSA03 Checklist WebApp (LINE LIFF + Google Apps Script)
 **เอกสาร System Analysis & Development Specification**
-**เวอร์ชัน:** 1.3 | **วันที่จัดทำ:** 2026-09-05 | **สถานะ:** อัปเดตตาม Requirement หน้างานและการทดสอบจริง (Decisions D6 - D11)
+**เวอร์ชัน:** 1.4 | **วันที่จัดทำ:** 2026-09-07 | **สถานะ:** อัปเดตตาม Requirement หน้างานและการทดสอบจริง (Decisions D6 - D17)
 
 > เอกสารนี้เขียนขึ้นเพื่อให้ทีม Dev (รวมถึง AI dev) ตัดสินใจเรื่อง business logic ให้น้อยที่สุด ทุกจุดที่ผู้ให้โจทย์ระบุมาไม่ครบถ้วน จะถูกเติมเต็มด้วย "สมมติฐานของ SA" ที่ระบุไว้ชัดเจนว่าเป็นสมมติฐาน ไม่ใช่ requirement ดั้งเดิม — ทีม Dev ต้องยึดตามเอกสารนี้เป็นหลัก ไม่ต้องเดาเพิ่ม หากพบจุดที่ยังคลุมเครือระหว่างพัฒนา ให้กลับมาถามผู้ให้โจทย์ ไม่ใช่สมมติเอง
+
+> **Changelog v1.4 (2026-09-07) — ล่าสุด:** อัปเดตสถาปัตยกรรมและฟีเจอร์ตามการใช้งานจริง:
+> 1. **[D12] Configurable Approval Steps (1 หรือ 2 ขั้นตอน):** รองรับการตั้งค่าขั้นตอนการอนุมัติผ่าน Config `APPROVAL_STEPS` (`'1'` หรือ `'2'`) หากตั้งเป็น 1 ขั้นตอน รายการจะอนุมัติจบสมบูรณ์ทันทีที่ระดับ 1 (ไม่ต้องเลือกผู้อนุมัติ L2) และซ่อนแท็บ L2 บน UI
+> 2. **[D13] Month Filter สำหรับคิวอนุมัติระดับ 2:** เปิดใช้งานตัวกรองประจำเดือน (`monthFilterInput`) ให้กับแท็บ "รออนุมัติระดับ 2" เช่นเดียวกับระดับ 1 เพื่อให้ผู้บริหารตรวจสอบและอนุมัติงานตามรอบเดือนได้สะดวกรวดเร็ว
+> 3. **[D14] ระบบ 24-Hour Browser Local Cache (`localStorage`) + ปุ่ม Manual Refresh:** แคชรายชื่อโครงการและคำถามไว้ใน Browser นาน 24 ชั่วโมง เพื่อให้เปิดหน้าเว็บได้ทันที (0 ms) พร้อมปุ่ม `🔄 อัปเดตข้อมูล` (`btnRefreshMasterCache`) สำหรับกดบังคับดึงข้อมูลล่าสุดจาก Sheet เมื่อมีการแก้ไข
+> 4. **[D15] ปุ่ม "➖ ไม่ตรวจทั้งหมวด" บนแถบหัวข้อ (Section Header NA Toggle):** เพิ่มปุ่มสำหรับเลือก/ยกเลิก "ไม่ตรวจ (-)" ให้กับทุกข้อย่อยในหมวดนั้นได้ในคลิกเดียว พร้อมระบบ State Sync ที่ตรวจจับและไฮไลต์ปุ่มอัตโนมัติหากทุกข้อย่อยในหมวดเป็น `-`
+> 5. **[D16] แสดงแถบหัวข้อ (`header_flag = 'Y'`) และ Sticky Header ในหน้าต่างดูรายละเอียด:** ปรับปรุงหน้าต่าง Pop-up ดูรายละเอียดผลตรวจ (`viewDetails`) ในหน้าจออนุมัติ ให้แสดงแถบหัวข้อหมวดหมู่ `📑` สีฟ้าอ่อน คั่นแต่ละหมวดหมู่ตามลำดับบนลงล่างจาก `FORM_MASTER` พร้อมตรึงหัวตาราง ("ข้อ", "หัวข้อการตรวจสอบ", "ผลตรวจ") ไว้ด้านบนเสมอขณะเลื่อนหน้าจอ
+> 6. **[D17] สถาปัตยกรรม Dynamic Cache Keys & Configurable Sheet Names:** ปรับให้แคชใน `localStorage` ใช้ Key อ้างอิงตาม `SCREEN_TAG` (เช่น `FM_SA03_LOCAL_QUESTIONS`) และรองรับการกำหนดชื่อชีตผ่าน Config (`TRANSACTION_SHEET_NAME`, `FORM_MASTER_SHEET_NAME`) เพื่อให้สามารถ Duplicate โค้ดไปใช้กับแบบฟอร์มอื่นๆ (SA01, SA02 ฯลฯ) ได้ทันที
 
 > **Changelog v1.3 (2026-09-05):** อัปเดตข้อกำหนดตามผลการทดสอบหน้างานจริงและการปรับปรุงระบบ:
 > 1. **[D6] ปรับคำของปุ่มตัวเลือก Checklist บน UI:** เปลี่ยนจาก `"ปลอดภัย / มี (Y)"`, `"ไม่ปลอดภัย / ไม่มี (N)"`, `"ไม่เกี่ยวข้อง (-)"` ➡️ เป็น **`"✅ ผ่าน"`**, **`"❌ ไม่ผ่าน"`**, **`"➖ ไม่ตรวจ"`** เพื่อความกระชับและอ่านง่ายบนมือถือ (ส่วนข้อมูลที่บันทึกลงชีตและ JSON ยังคงเป็น `'Y'`, `'N'`, `'-'` เช่นเดิม 100%)
@@ -49,12 +57,18 @@
 | D3 | เมื่อกด "ปฏิเสธ" (ระดับ 1 หรือ 2) | **ตีกลับสถานะให้ผู้บันทึกแก้ไข แล้วส่งเข้าอนุมัติใหม่ได้** (ไม่ใช่ปิดรายการถาวร) |
 | D4 | วิธีเก็บคำตอบ checklist ใน `FMSA03_TRANSACTION` | **เก็บเป็น JSON คอลัมน์เดียว (`ANSWERS_JSON`)** คีย์ = `record_id` ของ `FORM_MASTER` ไม่ใช้วิธีแยกคอลัมน์ `FMSA03_1...N` ตามที่เสนอไว้เดิม |
 | D5 (v1.2) | วิธีเข้าถึงข้อมูล `FORM_MASTER` (แทน OI-7 เดิม) | **ไม่เรียกผ่าน External API/MasterCacheAPI** แต่เก็บเป็น **Sheet Tab ในไฟล์ Spreadsheet เดียวกัน** กับ `FMSA03_TRANSACTION` (ใช้ `SPREADSHEET_ID` ตัวเดียวกัน) และอ่านผ่าน `CacheService.getScriptCache()` อายุ **6 ชั่วโมงเต็ม (21,600 วินาที)** พร้อมแยกฟังก์ชัน Clear/Write cache ให้ Trigger รายวันปลุกทำงาน |
-| **D6 (ใหม่ v1.3)** | ข้อความตัวเลือกคำตอบ Checklist บน UI | แสดงผลเป็น **"✅ ผ่าน"**, **"❌ ไม่ผ่าน"**, **"➖ ไม่ตรวจ"** (ส่วนค่าที่บันทึกใน `ANSWERS_JSON` ยังคงเป็น `'Y'`, `'N'`, `'-'` เช่นเดิม 100%) |
-| **D7 (ใหม่ v1.3)** | บทบาทผู้อนุมัติระดับ 1 และ 2 | ผู้อนุมัติระดับ 1 = **"จป.วิชาชีพ"**, ผู้อนุมัติระดับ 2 = **"จป.บริหาร"** ดึงจาก Central API ผ่าน Tag `APPROVE_TAG_L1` และ `APPROVE_TAG_L2` พร้อม Token = `secret-token-12345` ผ่าน Script Properties |
-| **D8 (ใหม่ v1.3)** | ประสิทธิภาพการอ่าน Script Properties | โหลดแบบ **Single Network Call + In-Memory Caching** ครั้งเดียวต่อ execution context (`_loadedProps`) ลด network latency ซ้ำซ้อน |
-| **D9 (ใหม่ v1.3)** | สถาปัตยกรรมการแสดงผล Web App | รองรับ **Dual-Mode**: ทั้ง Standalone Single Page App บน **GitHub Pages** (แก้ปัญหา LIFF iframe) และ Native **Google Apps Script Web App** |
-| **D10 (ใหม่ v1.3)** | สิทธิ์การเข้าถึง Web App (`appsscript.json`) | กำหนด `"access": "ANYONE_ANONYMOUS"` (ทุกคน) + `"executeAs": "USER_DEPLOYING"` (ฉัน) เพื่อให้เปิดใน LINE LIFF ได้โดยไม่ต้องล็อกอิน Google |
-| **D11 (ใหม่ v1.3)** | สัดส่วน Visual Hierarchy ของหัวข้อตรวจ | หัวข้อคำถามต้องใหญ่และเด่นกว่าปุ่มคำตอบ (`1.05rem` Bold 700 vs `0.90rem` บนปุ่ม) และนำป้าย Safety Checklist ออกจาก Navbar Header |
+| **D6 (v1.3)** | ข้อความตัวเลือกคำตอบ Checklist บน UI | แสดงผลเป็น **"✅ ผ่าน"**, **"❌ ไม่ผ่าน"**, **"➖ ไม่ตรวจ"** (ส่วนค่าที่บันทึกใน `ANSWERS_JSON` ยังคงเป็น `'Y'`, `'N'`, `'-'` เช่นเดิม 100%) |
+| **D7 (v1.3)** | บทบาทผู้อนุมัติระดับ 1 และ 2 | ผู้อนุมัติระดับ 1 = **"จป.วิชาชีพ"**, ผู้อนุมัติระดับ 2 = **"จป.บริหาร"** ดึงจาก Central API ผ่าน Tag `APPROVE_TAG_L1` และ `APPROVE_TAG_L2` พร้อม Token = `secret-token-12345` ผ่าน Script Properties |
+| **D8 (v1.3)** | ประสิทธิภาพการอ่าน Script Properties | โหลดแบบ **Single Network Call + In-Memory Caching** ครั้งเดียวต่อ execution context (`_loadedProps`) ลด network latency ซ้ำซ้อน |
+| **D9 (v1.3)** | สถาปัตยกรรมการแสดงผล Web App | รองรับ **Dual-Mode**: ทั้ง Standalone Single Page App บน **GitHub Pages** (แก้ปัญหา LIFF iframe) และ Native **Google Apps Script Web App** |
+| **D10 (v1.3)** | สิทธิ์การเข้าถึง Web App (`appsscript.json`) | กำหนด `"access": "ANYONE_ANONYMOUS"` (ทุกคน) + `"executeAs": "USER_DEPLOYING"` (ฉัน) เพื่อให้เปิดใน LINE LIFF ได้โดยไม่ต้องล็อกอิน Google |
+| **D11 (v1.3)** | สัดส่วน Visual Hierarchy ของหัวข้อตรวจ | หัวข้อคำถามต้องใหญ่และเด่นกว่าปุ่มคำตอบ (`1.05rem` Bold 700 vs `0.90rem` บนปุ่ม) และนำป้าย Safety Checklist ออกจาก Navbar Header |
+| **D12 (ใหม่ v1.4)** | Workflow อนุมัติแบบกำหนดขั้นตอนได้ | กำหนดผ่าน Config `APPROVAL_STEPS` รองรับทั้ง 1 ขั้นตอน (อนุมัติจบที่ L1 ทันที เป็น `APPROVED`) และ 2 ขั้นตอน (ส่งต่อ L2) |
+| **D13 (ใหม่ v1.4)** | Month Filter สำหรับคิวอนุมัติระดับ 2 | เพิ่มตัวกรองประจำเดือนให้กับแท็บ "รออนุมัติระดับ 2" เช่นเดียวกับระดับ 1 เพื่อความสม่ำเสมอในการค้นหา |
+| **D14 (ใหม่ v1.4)** | 24-Hour Browser Cache + Manual Refresh | บันทึกโครงสร้างคำถามและโครงการลง `localStorage` นาน 24 ชม. เปิดเว็บได้ทันที (0 ms) พร้อมปุ่ม `🔄 อัปเดตข้อมูล` ให้ผู้ใช้กดรีเฟรชได้เอง |
+| **D15 (ใหม่ v1.4)** | ปุ่มเลือกไม่ตรวจทั้งหมวด (Section Header NA) | เพิ่มปุ่ม `➖ ไม่ตรวจทั้งหมวด` บนแถบหัวข้อ เพื่อเซ็ตข้อย่อยในหมวดเป็น `-` ได้ในคลิกเดียว พร้อม Sync สถานะอัตโนมัติ |
+| **D16 (ใหม่ v1.4)** | แสดงหัวข้อและ Sticky Header ใน Pop-up รายละเอียด | ในหน้าต่าง Pop-up รายละเอียดผลตรวจ ให้ดึงแถวหัวข้อ (`header_flag = 'Y'`) มาคั่นหมวดหมู่ตามลำดับบนลงล่างจาก Sheet พร้อมตรึงหัวตารางด้านบน |
+| **D17 (ใหม่ v1.4)** | Dynamic Cache Keys & Configurable Sheet Names | ใช้ Cache Key อ้างอิงตาม `SCREEN_TAG` (เช่น `FM_SA03_LOCAL_QUESTIONS`) และตั้งชื่อชีตผ่าน Config เพื่อให้ Duplicate ไปใช้กับฟอร์มอื่นได้ง่าย |
 
 ทีม Dev ยึดตาม Decision Log นี้เป็นอันดับแรกในกรณีที่เนื้อหาส่วนอื่นของเอกสารดูขัดแย้งกัน
 
@@ -108,78 +122,131 @@ proxy_url_master   Services/*.gs -- Repositories/*.gs -- Google Sheets
 ```
 
 **หลักการออกแบบ:**
-- แยกโค้ดเป็นหลายไฟล์ตามหน้าที่ (ห้ามรวมทุกอย่างใน `Code.gs`) — ดูโครงสร้างเต็มในหมวด 4
-- ทุก Controller เรียกผ่าน Service layer เท่านั้น ห้ามอ่าน/เขียน Sheet ตรงจาก Controller
-- ทุก Config (URL, token) เก็บใน Script Properties ผ่าน `Config.gs` เท่านั้น ห้าม hardcode ค่าคงที่ปนในไฟล์ business logic
-- Response ทุก endpoint เป็นรูปแบบ JSON มาตรฐานเดียวกันทั้งระบบ (ดูหมวด 9.1)
+- แยกโค้ดเป็นหลายไฟล์ตามหน้าที่ (ห้ามรวมทุกอย่างใ�## 6. Configuration / Script Properties
+
+| Key | คำอธิบาย | ค่าที่ใช้งานจริง (Configured) |
+|---|---|---|
+| `SPREADSHEET_ID` | ID ของ Google Sheet หลัก (ทั้ง `FORM_MASTER` และ `FMSA03_TRANSACTION`) | `1ZBy4XalB74HFWVKRo30OFJG48Gxe41FruBoDuLnuxF4` |
+| `PROXY_URL_MASTER` | URL สำหรับ Central MasterCacheAPI (ยืนยันตัวตน, ดึงโปรไฟล์, ดึงผู้อนุมัติ) | `https://script.google.com/macros/s/AKfycbwhbYUFPHlMq5KrtHRZUNTjeHsKtSF2IW0bEzJZwL-hqBhzFx3gXR4ijL83ajPs0zcQDA/exec` |
+| `SHARED_TOKEN` | Shared-Secret Token สำหรับความปลอดภัยระหว่าง Server-to-Server | `secret-token-12345` |
+| `LIFF_ID` | LINE LIFF Application ID | `2009016720-NiJ6Jzhp` |
+| `APPROVE_TAG_L1` | Role Tag ผู้อนุมัติระดับ 1 (จป.วิชาชีพ) | `จป.วิชาชีพ` |
+| `APPROVE_TAG_L2` | Role Tag ผู้อนุมัติระดับ 2 (จป.บริหาร) | `จป.บริหาร` |
+| `SCREEN_TAG` | รหัสหน้าจอสำหรับสิทธิ์เข้าใช้งาน | `SA03` |
+| `PROJECT_DATASET_KEY` | Dataset Key สำหรับดึงรายชื่อโครงการจาก Central API | `project` |
+| `APPROVAL_STEPS` | จำนวนขั้นตอนการอนุมัติ (`1` หรือ `2` ขั้นตอน) | `2` (หรือ `1` สำหรับองค์กรที่อนุมัติขั้นตอนเดียว) |
+| `TRANSACTION_SHEET_NAME` | ชื่อชีตบันทึกข้อมูล Transaction | `FMSA03_TRANSACTION` |
+| `FORM_MASTER_SHEET_NAME` | ชื่อชีตแม่แบบคำถาม | `FORM_MASTER` |
+| `ENABLE_SHEET_FALLBACK`| เปิดใช้ Sheet ตรงเมื่อ Central API ล่มหรือไม่ | `false` |
+| `LINE_CHANNEL_ACCESS_TOKEN` | Token สำหรับส่ง LINE push message แจ้งเตือน | (กำหนดใน Script Properties เมื่อต้องการเปิดใช้งาน) |
+
+> **[สถาปัตยกรรม Config v1.3/v1.4 - In-Memory Caching & Dynamic Schema]:**
+> เพื่อแก้ไขปัญหา Latency ที่เกิดจากการเรียก `PropertiesService.getScriptProperties().getProperty(key)` ซ้ำๆ หลายครั้งใน 1 Request, ระบบได้ปรับให้ `Config.gs` ใช้กลไก **Single Network Call + In-Memory Caching**:
+> - โหลด `getProperties()` เพียงรอบเดียวต่อ 1 Execution Context และเก็บผลลัพธ์ในตัวแปร RAM `_loadedProps`
+> - การเรียกอ่านค่าผ่าน `Config.getXxx()` ในรอบถัดไปจะดึงจาก RAM ทันที (< 0.001 ms)
+> - รองรับการเปลี่ยนชื่อ Sheet และ `SCREEN_TAG` ได้อย่างอิสระผ่าน Config โดยไม่ต้องแก้โค้ด Service หรือ Repo
 
 ---
 
-## 4. โครงสร้างไฟล์โปรเจกต์ Google Apps Script
+## 7. Business Rules & Workflow
 
+### 7.1 State Machine ของ `STATUS`
+
+#### กรณีอนุมัติ 2 ขั้นตอน (`APPROVAL_STEPS = '2'`):
 ```
-Config.gs                      - อ่าน/ห่อหุ้ม Script Properties ทั้งหมด
-Router.gs                      - doGet(e), doPost(e): จุดเข้าเดียว, dispatch ตาม action, try/catch ครอบ, คืน JSON มาตรฐาน
-Auth.gs                        - verifyLineProfile(token/uid): เรียก proxy_url_master, คืน users_profile หรือ throw AuthError
+        (บันทึกครั้งแรก)
+              |
+              v
+        PENDING_L1  --------- L1 ปฏิเสธ ---------+
+              |                                    |
+        L1 อนุมัติ                                  v
+    (เลือก approve_profile2 ตอนนี้)             REJECTED
+              |                                    ^
+              v                                    |
+        PENDING_L2  --------- L2 ปฏิเสธ -----------+
+              |
+        L2 อนุมัติ
+              |
+              v
+          APPROVED (จบกระบวนการ, ล็อกแก้ไขถาวร)
 
-Controllers/
-  ChecklistController.gs       - handleGetChecklistForm, handleGetMyTransaction, handleSaveChecklist
-  ApprovalController.gs        - handleGetApprovalQueue, handleApproveAction, handleRejectAction
-
-Services/
-  ChecklistService.gs          - business rule: unique 1 record/วัน/user, edit-lock, map FORM_MASTER -> คอลัมน์คำตอบ
-  ApprovalService.gs           - state machine การอนุมัติ, ตรวจสอบสิทธิ์ผู้อนุมัติ, trigger การแจ้งเตือน
-  NotifyService.gs             - sendLineNotify(lineUid, message): ส่ง LINE push message
-
-Repositories/
-  FormMasterRepo.gs            - [แก้ไข v1.2] อ่าน FORM_MASTER จาก Sheet Tab ในไฟล์เดียวกับ Transaction
-                                  ผ่าน CacheService (getFormMasterCached()) ตาม D5/หมวด 5.1.2
-                                  + มีฟังก์ชัน refreshFormMasterCache() แยกสำหรับ Trigger เรียก clear/write cache ใหม่ทุกวัน
-  TransactionRepo.gs           - CRUD บน FMSA03_TRANSACTION, ค้นหาด้วย Line_UID+วันที่, ค้นหาคิวอนุมัติ
-
-Utils/
-  IdGenerator.gs               - generateTransRecordId(): สร้าง PK แบบ non-sequential (หมวด 10)
-  DateUtils.gs                 - todayBangkok(), formatDateBangkok(), isValidDateString()
-  ResponseUtils.gs             - ok(data), fail(code, message): ห่อ JSON response มาตรฐาน
-
-Triggers/
-  TriggerSetup.gs              - [เพิ่มใหม่ v1.2] setupFormMasterCacheTrigger(): สร้าง Time-driven Trigger
-                                  เรียก refreshFormMasterCache() ทุกวัน (ดูหมวด 5.1.2)
-
-Client (HtmlService templates):
-  Index.html                   - LIFF bootstrap: liff.init(), ตรวจ role, route ไปหน้าที่ถูกต้อง
-  ChecklistView.html            - หน้าจอกรอกตรวจสอบ (ใช้ include CSS_Common, JS_Common, JS_Checklist)
-  ApprovalView.html             - หน้าจออนุมัติ (ใช้ include CSS_Common, JS_Common, JS_Approval)
-  CSS_Common.html               - style ใช้ร่วมทุกหน้า (mobile-first)
-  JS_Common.html                 - liff init helper, wrapper เรียก google.script.run, toast/loading UI
-  JS_Checklist.html              - logic เฉพาะหน้ากรอกตรวจสอบ
-  JS_Approval.html               - logic เฉพาะหน้าอนุมัติ
+REJECTED --(ผู้บันทึกแก้ไขแล้วกด "ส่งอนุมัติใหม่")--> PENDING_L1  (RESUBMIT_COUNT +1)
 ```
 
-**กติกา:** ทุกไฟล์ `.gs` มีความรับผิดชอบเดียว (single responsibility) Controller ห้ามมี business logic เกิน "รับ input -> validate รูปแบบเบื้องต้น -> เรียก Service -> ห่อ response" Service ห้ามยุ่งกับ Sheet API โดยตรง (เรียกผ่าน Repository เท่านั้น)
+#### กรณีอนุมัติ 1 ขั้นตอน (`APPROVAL_STEPS = '1'`):
+```
+        (บันทึกครั้งแรก)
+              |
+              v
+        PENDING_L1  --------- L1 ปฏิเสธ ---------> REJECTED
+              |                                        ^
+        L1 อนุมัติ                                     |
+              |                                        |
+              v                                        |
+          APPROVED (จบกระบวนการทันที)                   |
+                                                       |
+REJECTED --(ผู้บันทึกแก้ไขแล้วกด "ส่งอนุมัติใหม่")--------+
+```
+
+### 7.2 กติกาการสร้าง/แก้ไขรายการ (Checklist Entry)
+
+- **BR-1 (Unique key):** 1 รายการต่อ (`Line_UID` + `TRANS_DATE`) เท่านั้น — ผู้ใช้ 1 คน สร้างได้ 1 โครงการ/วัน
+- **BR-2 (Edit lock):** แก้ไขได้เฉพาะเมื่อ `STATUS` เป็น `PENDING_L1` หรือ `REJECTED` เท่านั้น เมื่อเข้าสู่ `PENDING_L2` หรือ `APPROVED` แล้ว **ห้ามแก้ไขทุกฟิลด์รวมถึงคำตอบ checklist**
+- **BR-3:** ทุกคำถามที่ `header_flag='N'` ต้องถูกตอบ (`Y`/`N`/`-`) ครบก่อนบันทึกจริง (submit) ห้ามมีค่าว่าง — ป้องกันด้วย validation ทั้งฝั่ง client และ server
+- **BR-4:** การกด "ส่งอนุมัติใหม่" จากสถานะ `REJECTED` ต้อง reset `APPROVE1_RESULT`, `APPROVE1_DATETIME`, `APPROVE2_RESULT`, `APPROVE2_DATETIME`, `approve_profile2`, `REJECT_REASON` เป็นค่าว่าง และเพิ่ม `RESUBMIT_COUNT` ทีละ 1 ก่อนเปลี่ยน `STATUS` เป็น `PENDING_L1`
+
+### 7.3 กติกาการอนุมัติระดับ 1 (Approver L1)
+
+- แสดงรายการที่ `STATUS = PENDING_L1` และ `approve_profile1` ตรงกับผู้ login
+- มี filter เลือกเดือน (ปีเดือนของ `TRANS_DATE`) แสดงรายการเฉพาะเดือนที่เลือก
+- เลือกได้ทีละรายการ หรือ "เลือกทั้งหมด" แล้วกดปุ่ม: **อนุมัติ** หรือ **ปฏิเสธ**
+- ปุ่ม **อนุมัติ**: 
+  - กรณี `APPROVAL_STEPS = 2`: ต้องเลือก "ผู้อนุมัติระดับ 2" ก่อนยืนยัน -> set `STATUS = PENDING_L2`, `APPROVE1_RESULT = APPROVED`, `APPROVE1_DATETIME = now`, `approve_profile2 = <ที่เลือก>` -> แจ้งเตือนไปยัง L2
+  - กรณี `APPROVAL_STEPS = 1`: ยืนยันการอนุมัติได้ทันที -> set `STATUS = APPROVED`, `APPROVE1_RESULT = APPROVED`, `APPROVE1_DATETIME = now` (จบกระบวนการทันที)
+- ปุ่ม **ปฏิเสธ**: มีช่องกรอกเหตุผล -> set `STATUS = REJECTED`, `APPROVE1_RESULT = REJECTED`, `APPROVE1_DATETIME = now`, `REJECT_REASON = <เหตุผล>` -> แจ้งเตือนกลับไปยังผู้ตรวจ
+
+### 7.4 กติกาการอนุมัติระดับ 2 (Approver L2)
+
+- ทำงานเฉพาะเมื่อ `APPROVAL_STEPS = 2`
+- แสดงรายการที่ `STATUS = PENDING_L2` และ `approve_profile2` ตรงกับผู้ login
+- **[อัปเดต v1.4]** มีตัวกรองประจำเดือน (`monthFilterInput`) เช่นเดียวกับระดับ 1 เพื่อความสะดวกในการตรวจสอบตามรอบบิล/รอบเดือน
+- ปุ่ม **อนุมัติ**: `STATUS = APPROVED`, `APPROVE2_RESULT = APPROVED`, `APPROVE2_DATETIME = now` (จบกระบวนการ ล็อกถาวร)
+- ปุ่ม **ปฏิเสธ**: `STATUS = REJECTED`, `APPROVE2_RESULT = REJECTED`, `APPROVE2_DATETIME = now`, `REJECT_REASON = <เหตุผล>` -> ตีกลับให้ผู้ตรวจ
 
 ---
 
-## 5. Data Dictionary
+## 8. Function Spec รายหน้าจอ
 
-### 5.1 Sheet: `FORM_MASTER` (ชุดคำถาม — เฉพาะฟอร์ม SA03 ตาม D1)
+### 8.1 หน้าจอบันทึกตรวจสอบ (ChecklistView)
 
-> **[อัปเดต v1.2 — ตาม D5]** `FORM_MASTER` เป็น **Sheet Tab อยู่ในไฟล์ Google Spreadsheet เดียวกัน** กับ `FMSA03_TRANSACTION` (ใช้ `SPREADSHEET_ID` เดียวกันจาก `Config.gs` — ไม่ต้องสร้างไฟล์แยก ไม่ต้องเรียก External API) การอ่านข้อมูลต้องผ่าน `FormMasterRepo.gs` เท่านั้น (ห้าม Controller/Service เรียก `getRange()` ตรงจาก Sheet) รายละเอียดกลไก Cache ดูหมวด 5.1.2
+**ลำดับการทำงานเมื่อเปิดหน้าจอ:**
+1. `liff.init()` -> ได้ LINE UID
+2. เรียก `verifyLineProfile` ผ่าน Central API -> ได้สิทธิ์ผู้ใช้งาน
+3. **[อัปเดต v1.4] ตรวจสอบ Browser Local Cache (`localStorage`):**
+   - ตรวจสอบ `FM_<SCREEN_TAG>_LOCAL_QUESTIONS` และ `CENTRAL_SITE_PROJECTS` อายุไม่เกิน 24 ชม.
+   - หากมีแคช: เรนเดอร์หน้าจอคำถามและดรอปดาวน์ทันที (0 ms)
+   - หากไม่มีแคช: ดึงจากเซิร์ฟเวอร์และบันทึกลง `localStorage`
+   - มีปุ่ม `🔄 อัปเดตข้อมูล` (`btnRefreshMasterCache`) สำหรับบังคับโหลดข้อมูลใหม่สดๆ จาก Sheet
+4. **[อัปเดต v1.4] ปุ่มเลือกไม่ตรวจทั้งหมวด (Section Header NA):**
+   - บนแถบหัวข้อแต่ละหมวด (`.section-header`) มีปุ่ม `➖ ไม่ตรวจทั้งหมวด`
+   - เมื่อกด: ข้อย่อยทั้งหมดในหมวดนั้นจะถูกตั้งค่าเป็น `'-'` (ไม่ตรวจ) ทันที
+   - หากข้อย่อยทั้งหมดเป็น `'-'` อยู่แล้ว ปุ่มจะไฮไลต์เป็นสีเทาเข้ม (`.active-na`) และหากกดซ้ำจะเคลียร์ค่าเพื่อเลือกใหม่ได้
+5. โหลด Transaction เดิมของวันนั้น -> ถ้าแก้ไขได้ให้เติมคำตอบเดิม, ถ้าอนุมัติแล้วให้แสดงสถานะล็อก
+6. ผู้ใช้เลือกโครงการ, เลือกผู้อนุมัติ L1, ตอบคำถามครบทุกข้อ -> กด "💾 บันทึกผลการตรวจสอบ"
 
-| Column | Field | Type | Nullable | คำอธิบาย |
-|---|---|---|---|---|
-| A | `record_id` | numeric (PK) | No | เลขหัวข้อ เรียงจาก 1...N ตามลำดับที่สร้าง (numeric, sequential) |
-| B | `item_name` | text | No | ชื่อรายการตรวจ / ชื่อหัวข้อ |
-| C | `header_flag` | text (`Y`/`N`) | No | `Y` = เป็นหัวข้อ/หมวดหมู่ (section header, ไม่ต้องตอบ) · `N` = เป็นคำถามที่ต้องตอบ Yes/No/`-` |
-| D | `score` | numeric | No (default 0) | คะแนนของข้อนั้น `0` = ไม่กำหนดคะแนน (สำรองไว้อนาคต ดู OI-3) |
+### 8.2 หน้าจออนุมัติ (ApprovalView)
 
-#### 5.1.1 การอ้างอิงคำตอบ (แก้ไขตาม Decision D4)
-
-**ยกเลิกแนวทาง `answer_column_no`** ที่เคยเสนอไว้ เนื่องจากเปลี่ยนวิธีเก็บคำตอบเป็น JSON แบบ key-value แล้ว จึงใช้ **`record_id` ของ `FORM_MASTER` เป็น key ในการอ้างอิงคำตอบโดยตรง** — วิธีนี้ทนทานต่อการแก้ไข/แทรก/ลบ/สลับลำดับแถวใน `FORM_MASTER` โดยธรรมชาติ เพราะแต่ละคำตอบใน JSON ระบุ `record_id` กำกับตัวเองอยู่แล้ว ไม่ได้อ้างอิงตามตำแหน่ง
-
-#### 5.1.2 [ใหม่ v1.2] สถาปัตยกรรมการเก็บและ Cache ของ `FORM_MASTER`
-
-แทนที่การพิจารณาใช้ `MasterCacheAPI` ภายนอก (ตาม OI-7 เดิม) ตัดสินใจแล้วตาม D5 ว่าจะ**เก็บ `FORM_MASTER` เป็น Sheet ในไฟล์เดียวกับ Transaction** และจัดการ cache เองภายใน Apps Script Project นี้ ด้วยเหตุผล: ลด external dependency, ลด network round-trip, แก้ไขคำถามได้ทันทีผ่าน Sheet โดยตรง
+**ลำดับการทำงานเมื่อเปิดหน้าจอ:**
+1. ตรวจสอบสิทธิ์ผู้ใช้ และจำนวนขั้นตอนการอนุมัติ (`approvalSteps`)
+2. หาก `approvalSteps === 1`: แสดงแท็บเดียว ("รายการรออนุมัติ"), ซ่อนแท็บ L2
+3. หาก `approvalSteps === 2`: แสดง 2 แท็บ ("รออนุมัติระดับ 1" และ "รออนุมัติระดับ 2") พร้อมตัวเลข Badge
+4. ทั้งแท็บ L1 และ L2 มีตัวกรองเดือนประจำงวด (`monthFilterInput`), Checkbox เลือกรายการ, และปุ่ม Batch Action
+5. **[อัปเดต v1.4] หน้าต่างดูรายละเอียดผลตรวจ (`viewDetails`):**
+   - แสดงข้อมูลโครงการ, วันที่ตรวจ, ผู้ตรวจ, ผู้อนุมัติ L1/L2
+   - ตารางผลตรวจดึงโครงสร้างหัวข้อ (`header_flag = 'Y'`) จาก `FORM_MASTER` มาแสดงเป็นแถวหัวข้อคั่นหมวดหมู่ `📑` สีฟ้าอ่อนพาดเต็ม 3 คอลัมน์
+   - ข้อย่อย (`header_flag = 'N'`) แสดงเลขข้อ, ชื่อรายการ และ Badge สี: `✅ ผ่าน`, `❌ ไม่ผ่าน`, `➖ ไม่ตรวจ`
+   - ตรึงหัวตาราง ("ข้อ", "หัวข้อการตรวจสอบ", "ผลตรวจ") ไว้ด้านบนเสมอ (Sticky Table Header) ขณะเลื่อน Scroll ดูใน Pop-up
+   - มีระบบ Fallback อัตโนมัติป้องกันข้อมูลข้อคำตอบสูญหาย� D5 ว่าจะ**เก็บ `FORM_MASTER` เป็น Sheet ในไฟล์เดียวกับ Transaction** และจัดการ cache เองภายใน Apps Script Project นี้ ด้วยเหตุผล: ลด external dependency, ลด network round-trip, แก้ไขคำถามได้ทันทีผ่าน Sheet โดยตรง
 
 **กลไก Cache:**
 
