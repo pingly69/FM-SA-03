@@ -2193,7 +2193,24 @@
         var ansEl = document.getElementById('detailAnswersContent');
         if (ansEl) {
           var answers = target.answers || {};
-          var questions = self.questions || [];
+          var questions = (self.questions && self.questions.length > 0) ? self.questions : [];
+          if (questions.length === 0 && window.ChecklistModule) {
+            if (ChecklistModule.currentData && ChecklistModule.currentData.questions && ChecklistModule.currentData.questions.length > 0) {
+              questions = ChecklistModule.currentData.questions;
+            } else if (typeof ChecklistModule.getLocalCache_ === 'function') {
+              var local = ChecklistModule.getLocalCache_();
+              if (local && local.questions && local.questions.length > 0) {
+                questions = local.questions;
+              }
+            }
+          }
+          if (questions.length === 0) {
+            try {
+              var tag = (window.App && window.App.screenTag) ? String(window.App.screenTag).trim() : 'SA03';
+              var qRaw = localStorage.getItem('FM_' + tag + '_LOCAL_QUESTIONS') || localStorage.getItem('FMSA03_LOCAL_QUESTIONS');
+              if (qRaw) questions = JSON.parse(qRaw);
+            } catch (e) {}
+          }
 
           if (Object.keys(answers).length === 0 && questions.length === 0) {
             ansEl.innerHTML = '<div style="color:#64748B; padding:10px;">ไม่มีข้อมูลคำตอบ</div>';
@@ -2216,7 +2233,8 @@
                 var item = questions[i];
                 if (!item) continue;
 
-                if (item.header_flag === 'Y') {
+                var isHeader = String(item.header_flag || '').trim().toUpperCase() === 'Y';
+                if (isHeader) {
                   // แถวหัวข้อ (Section Header) คั่นหมวดหมู่ พาดเต็ม 3 คอลัมน์
                   html += '<tr style="background: #EFF6FF; border-top: 2px solid #BFDBFE; border-bottom: 1px solid #BFDBFE;">' +
                     '<td colspan="3" style="padding: 9px 10px; font-weight: 700; color: #1E40AF; font-size: 0.90rem;">' +
